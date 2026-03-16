@@ -1,0 +1,8 @@
+requests
+fastapi
+uvicorn
+httpx
+haiku.rag
+outlines 
+ollama
+Jinja2

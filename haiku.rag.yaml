@@ -1,0 +1,135 @@
+# haiku.rag configuration file
+# See https://ggozad.github.io/haiku.rag/configuration/ for details
+
+environment: production
+storage:
+  data_dir: /home/nkhajehn/watcher-mcp-server/data
+  auto_vacuum: true
+  vacuum_retention_seconds: 86400
+monitor:
+  directories:
+    - /home/nkhajehn/watcher-mcp-server/docs_processed
+  delete_orphans: true
+  ignore_patterns:
+    - "**/.DS_Store"
+    - "**/.git/**"
+    - "**/__pycache__/**"
+    - "**/*.tmp"
+  include_patterns:
+    - "**/*.pdf"
+    - "**/*.html"
+    - "**/*.htm"
+    - "**/*.md"
+    - "**/*.docx"
+    - "**/*.pptx"
+    - "**/*.xlsx"
+    - "**/*.csv"
+    - "**/*.webp"
+    - "**/*.jpeg"
+    - "**/*.png"
+    - "**/*.tiff"
+    - "**/*.bmp"
+    - "**/*.mp3"
+    - "**/*.wav"
+    - "**/*.json"
+    - "**/*.txt"
+lancedb:
+  uri: ''
+  api_key: ''
+  region: ''
+embeddings:
+  model:
+    provider: ollama
+    name: mxbai-embed-large:latest 
+    vector_dim: 1024
+    base_url: null
+reranking:
+  model: null
+qa:
+  model:
+    provider: ollama
+    name: gpt-oss:latest
+    base_url: null
+    enable_thinking: false
+    temperature: null
+    max_tokens: null
+  max_iterations: 2
+  max_concurrency: 1
+research:
+  model:
+    provider: ollama
+    name: gpt-oss:latest
+    base_url: null
+    enable_thinking: false
+    temperature: null
+    max_tokens: null
+  max_iterations: 3
+  max_concurrency: 1
+rlm:
+  model:
+    provider: ollama
+    name: gpt-oss:latest
+    base_url: null
+    enable_thinking: false
+    temperature: null
+    max_tokens: null
+  code_timeout: 60.0
+  max_output_chars: 50000
+processing:
+  chunk_size: 512
+  converter: docling-serve
+  chunker: docling-serve
+  chunker_type: hybrid
+  chunking_tokenizer: Qwen/Qwen3-Embedding-0.6B
+  chunking_merge_peers: false
+  chunking_use_markdown_tables: true 
+  conversion_options:
+    do_ocr: true 
+    force_ocr: false
+    ocr_engine: auto
+    ocr_lang: []
+    do_table_structure: true 
+    table_mode: fast
+    table_cell_matching: true
+    images_scale: 1.0
+    generate_page_images: false
+    generate_picture_images: false
+    picture_description:
+      enabled: false
+      model:
+        provider: ollama
+        name: ministral-3
+        base_url: null
+        enable_thinking: null
+        temperature: null
+        max_tokens: null
+      timeout: 90
+      max_tokens: 200
+  auto_title: false
+  title_model:
+    provider: ollama
+    name: gpt-oss:latest
+    base_url: null
+    enable_thinking: false
+    temperature: null
+    max_tokens: null
+search:
+  limit: 8
+  context_radius: 2
+  max_context_items: 10
+  max_context_chars: 10000
+  vector_index_metric: cosine
+  vector_refine_factor: 30
+providers:
+  ollama:
+    base_url: http://localhost:11434
+  docling_serve:
+    base_url: http://localhost:5001
+    api_key: ''
+prompts:
+  domain_preamble: ''
+  qa: null
+  synthesis: null
+  picture_description: Describe this image for a blind user. State the image type
+    (screenshot, chart, photo, etc.), what it depicts, any visible text, and key visual
+    details. Be concise and accurate.

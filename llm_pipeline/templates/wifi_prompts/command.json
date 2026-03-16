@@ -1,0 +1,15 @@
+{
+    "type": "array",
+    "items": {
+	"type": "object",
+	"properties": {
+	    "justification": {"type": "string"},
+	    "command": {"type": "string"},
+	    "parameters": {
+		"type": "array",
+		"items": {"type": "string"}
+	    }
+	},
+	"required": ["justification", "command"]
+    }
+}
