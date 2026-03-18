@@ -4,24 +4,24 @@
 # Values can be quoted with single or double quotes if they contain spaces
 
 # CSV file containing model names
-models_csv=/home/nkhajehn/watcher-mcp-server/llm_pipeline/services/models_combined_with_num_predict.csv
+models_csv=/data2/nkhajehn/watcher-mcp-server/llm_pipeline/services/models_combined_with_num_predict.csv
 
 # Directory containing Jinja templates
-templates_dir=/home/nkhajehn/watcher-mcp-server/llm_pipeline/templates/wifi_prompts
+templates_dir=/data2/nkhajehn/watcher-mcp-server/llm_pipeline/templates/wifi_prompts
 
 # Specific templates to use (comma-separated, or leave empty/use "all" for all templates)
 # Examples:
 # template=security1.jinja,security-incremental-1.jinja
 # template=all
 # template=
-template=prompt9.jinja,prompt8.jinja,prompt6.jinja,prompt4.jinja,prompt7.jinja
+template=prompt9.jinja,prompt8.jinja,prompt6.jinja,prompt4.jinja
 
 
 # Starting iteration number
 start_iteration=1
 
 # Number of iterations to run
-num_iterations=2
+num_iterations=1
 
 # Number of trials per model
 trials_per_model=10

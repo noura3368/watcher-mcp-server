@@ -5,7 +5,7 @@ import os
 os.environ["HAIKU_EMBEDDING_MODEL"] = "mxbai-embed-large:latest"
 os.environ["HAIKU_EMBEDDING_VECTOR_DIM"] = "1024"
 os.environ["CONFIG"] = "/home/nkhajehn/watcher-mcp-server/haiku.rag.yaml"
-os.environ["DB"] = "/home/nkhajehn/watcher-mcp-server/data/haiku_mxbai.rag.lancedb"
+os.environ["DB"] = "/data2/nkhajehn/watcher-mcp-server/data/haiku_mxbai.rag.lancedb"
 
 import sys
 import subprocess
@@ -31,6 +31,7 @@ def run_command(cmd, shell=True, capture_output=False, text=True):
     """Run a shell command and return the result"""
     try:
         result = subprocess.run(cmd, shell=shell, capture_output=capture_output, text=text, check=False)
+        print("RESULT", result)
         return result
     except Exception as e:
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -70,7 +71,7 @@ def get_available_templates(templates_dir):
         info(f"Error getting templates: {e}")
         return []
 
-def load_config(config_file="/home/nkhajehn/watcher-mcp-server/llm_pipeline/services/config.txt"):
+def load_config(config_file="/data2/nkhajehn/watcher-mcp-server/llm_pipeline/services/config.txt"):
     """Load configuration from text file"""
     config = {
         "models_csv": "models_leq5b_20251028_203636.csv",
@@ -325,9 +326,10 @@ def main():
                         continue
                     
                     # Get identified commands so far and update foundsofar_str
+                    script_dir_res = Path(__file__).resolve().parent.parent.parent
                     script_dir = Path(__file__).resolve().parent
                     get_commands_cmd = (
-                        f"python {script_dir}/get_commands.py {model} --out-dir {script_dir}/results | tr '\\n' ' '"
+                        f"python {script_dir}/get_commands.py {model} --out-dir {script_dir_res}/results | tr '\\n' ' '"
                     )
                     result = run_command(get_commands_cmd, capture_output=True)
                     if result and result.returncode == 0:

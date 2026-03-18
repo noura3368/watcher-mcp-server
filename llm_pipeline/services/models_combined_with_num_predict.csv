@@ -1,5 +1,5 @@
 Model Name,Parameter Size (Billions),Parameter Size (Formatted),Context Size,num_predict
-qwen2.5-coder:32b,32.000,32.0B,32768,16384
+cogito:32b,32.000,32.0B,131072,32768
 vicuna:33b,33.000,33.0B,2048,2048
 codeup:13b,13.000,13.0B,4096,4096
 tulu3:8b,8.000,8.0B,131072,32768
@@ -51,7 +51,6 @@ llama2-uncensored:7b,7.000,7.0B,2048,2048
 granite3-dense:8b,8.000,8.0B,4096,4096
 aya-expanse:32b,32.000,32.0B,8192,4096
 exaone-deep:7.8b,7.800,7.8B,32768,16384
-cogito:32b,32.000,32.0B,131072,32768
 aya-expanse:8b,8.000,8.0B,8192,4096
 cogito:14b,14.000,14.0B,131072,32768
 cogito:8b,8.000,8.0B,131072,32768
@@ -151,3 +150,4 @@ qwen2.5vl:32b,32.000,32.0B,128000,32768
 mistral-small3.2:24b,24.000,24.0B,131072,32768
 qwen3:30b,30.000,30.0B,262144,65536
 qwen3-coder:latest,30.500,30.5B,262144,65536
+qwen2.5-coder:32b,32.000,32.0B,32768,16384
