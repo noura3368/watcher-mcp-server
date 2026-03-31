@@ -15,11 +15,11 @@ from watchdog.observers import Observer
 from services.create_markdown import convert_document
 from services.read_markdown import extract_records_from_markdown
 
-RAW_DIR = Path(os.getenv("RAW_DIR", "/home/nkhajehn/watcher-mcp-server/raw_docs"))
-PROCESSED_DIR = Path(os.getenv("PROCESSED_DIR", "/home/nkhajehn/watcher-mcp-server/docs_processed"))
-DB_PATH = Path(os.getenv("DB", "/home/nkhajehn/watcher-mcp-server/data/haiku_mxbai.rag.lancedb"))
-STATE_PATH = Path(os.getenv("STATE_PATH", "/home/nkhajehn/watcher-mcp-server/data/watcher_state.json"))
-CONFIG_PATH = Path(os.getenv("CONFIG", "/home/nkhajehn/watcher-mcp-server/haiku.rag.yaml"))
+RAW_DIR = Path(os.getenv("RAW_DIR", "/data/nkhajehn/watcher-mcp-server/raw_docs"))
+PROCESSED_DIR = Path(os.getenv("PROCESSED_DIR", "/data/nkhajehn/watcher-mcp-server/docs_processed"))
+DB_PATH = Path(os.getenv("DB", "/data/nkhajehn/watcher-mcp-server/data/haiku_mxbai.rag.lancedb"))
+STATE_PATH = Path(os.getenv("STATE_PATH", "/data/nkhajehn/watcher-mcp-server/data/watcher_state.json"))
+CONFIG_PATH = Path(os.getenv("CONFIG", "/data/nkhajehn/watcher-mcp-server/haiku.rag.yaml"))
 
 os.environ["CONFIG"] = str(CONFIG_PATH)
 os.environ["HAIKU_EMBEDDING_MODEL"] = "mxbai-embed-large:latest"

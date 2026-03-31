@@ -1,8 +1,8 @@
 failed_outputs*
 prompt*
 results*
-llm_pipeline/services/*.pyc
-data/haiku.rag.lancedb/*i
+*.pyc
+data/haiku.mxbai.rag.lancedb/*i
 raw_docs/*
 !raw_docs/.gitkeep
 data/*
@@ -10,3 +10,4 @@ data/*
 docs_processed/*
 !docs_processed/.gitkeep
 docling_models/*
+data/watcher_state.json

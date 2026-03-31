@@ -1,12 +1,6 @@
 #!/usr/bin/env python
 
 import os
-
-os.environ["HAIKU_EMBEDDING_MODEL"] = "mxbai-embed-large:latest"
-os.environ["HAIKU_EMBEDDING_VECTOR_DIM"] = "1024"
-os.environ["CONFIG"] = "/home/nkhajehn/watcher-mcp-server/haiku.rag.yaml"
-os.environ["DB"] = "/data2/nkhajehn/watcher-mcp-server/data/haiku_mxbai.rag.lancedb"
-
 import sys
 import subprocess
 import shutil
@@ -71,7 +65,7 @@ def get_available_templates(templates_dir):
         info(f"Error getting templates: {e}")
         return []
 
-def load_config(config_file="/data2/nkhajehn/watcher-mcp-server/llm_pipeline/services/config.txt"):
+def load_config(config_file="/data/nkhajehn/watcher-mcp-server/llm_pipeline/services/config.txt"):
     """Load configuration from text file"""
     config = {
         "models_csv": "models_leq5b_20251028_203636.csv",

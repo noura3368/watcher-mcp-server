@@ -3,12 +3,12 @@
 
 environment: production
 storage:
-  data_dir: /home/nkhajehn/watcher-mcp-server/data
+  data_dir: /data/nkhajehn/watcher-mcp-server/data
   auto_vacuum: true
   vacuum_retention_seconds: 86400
 monitor:
   directories:
-    - /home/nkhajehn/watcher-mcp-server/docs_processed
+    - /data/nkhajehn/watcher-mcp-server/docs_processed
   delete_orphans: true
   ignore_patterns:
     - "**/.DS_Store"
@@ -40,7 +40,7 @@ lancedb:
 embeddings:
   model:
     provider: ollama
-    name: mxbai-embed-large:latest 
+    name: mxbai-embed-large:latest
     vector_dim: 1024
     base_url: null
 reranking:

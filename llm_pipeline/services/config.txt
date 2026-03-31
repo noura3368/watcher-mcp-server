@@ -4,17 +4,17 @@
 # Values can be quoted with single or double quotes if they contain spaces
 
 # CSV file containing model names
-models_csv=/data2/nkhajehn/watcher-mcp-server/llm_pipeline/services/models_combined_with_num_predict.csv
+models_csv=/data/nkhajehn/watcher-mcp-server/llm_pipeline/services/models_combined_with_num_predict.csv
 
 # Directory containing Jinja templates
-templates_dir=/data2/nkhajehn/watcher-mcp-server/llm_pipeline/templates/wifi_prompts
+templates_dir=/data/nkhajehn/watcher-mcp-server/llm_pipeline/templates/ftp_prompts
 
 # Specific templates to use (comma-separated, or leave empty/use "all" for all templates)
 # Examples:
 # template=security1.jinja,security-incremental-1.jinja
 # template=all
 # template=
-template=prompt9.jinja,prompt8.jinja,prompt6.jinja,prompt4.jinja
+template=prompt6.jinja,prompt4.jinja,prompt7.jinja
 
 
 # Starting iteration number
@@ -27,7 +27,7 @@ num_iterations=1
 trials_per_model=10
 
 # Target device name
-target=ESP8266
+target=File Transfer Protocol
 
 # Interface type
 interface=serial AT-command interface

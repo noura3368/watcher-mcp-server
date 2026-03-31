@@ -45,79 +45,6 @@ class SecurityTestResponse(BaseModel):
 # Module-level cache for generators to avoid re-initialization
 _generator_cache: Dict[Tuple[str, str], Generator] = {}
 
-_num_predict_cache: Optional[Dict[str, int]] = None
-_DEFAULT_NUM_PREDICT = 4096
-
-def load_num_predict_mapping(csv_path: Optional[str] = None) -> Dict[str, int]:
-    """
-    Load num_predict values from CSV file and create a model name to num_predict mapping.
-    
-    Args:
-        csv_path: Optional path to CSV file. If None, uses models_combined_with_num_predict.csv
-                  in the same directory as this script.
-    
-    Returns:
-        Dictionary mapping model names to num_predict values
-    """
-    global _num_predict_cache
-    
-    # Return cached mapping if available
-    if _num_predict_cache is not None:
-        return _num_predict_cache
-    
-    # Determine CSV file path
-    if csv_path is None:
-        # Use the same directory as this script
-        script_dir = Path(__file__).parent
-        csv_path = script_dir / "models_combined_with_num_predict.csv"
-    else:
-        csv_path = Path(csv_path)
-    
-    mapping: Dict[str, int] = {}
-    
-    try:
-        if not csv_path.exists():
-            print(f"Warning: CSV file not found at {csv_path}, using default num_predict={_DEFAULT_NUM_PREDICT}")
-            _num_predict_cache = {}
-            return mapping
-        with open(csv_path, 'r', encoding='utf-8') as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                model_name = row.get('Model Name', '').strip()
-                num_predict_str = row.get('num_predict', '').strip()
-                
-                if model_name and num_predict_str:
-                    try:
-                        num_predict = int(num_predict_str)
-                        mapping[model_name] = num_predict
-                    except (ValueError, TypeError):
-                        # Skip invalid num_predict values
-                        continue
-        
-        # Cache the mapping
-        _num_predict_cache = mapping
-        print(f"Loaded num_predict mapping for {len(mapping)} models from {csv_path}")
-        
-    except Exception as e:
-        print(f"Error loading num_predict CSV from {csv_path}: {e}")
-        print(f"Using default num_predict={_DEFAULT_NUM_PREDICT} for all models")
-        _num_predict_cache = {}
-    
-    return mapping
-
-def get_num_predict_for_model(model_name: str, csv_file: str) -> int:
-    """
-    Get the num_predict value for a given model name.
-    
-    Args:
-        model_name: The name of the model
-    
-    Returns:
-        The num_predict value for the model, or default if not found
-    """
-    mapping = load_num_predict_mapping(csv_file)
-    return mapping.get(model_name, _DEFAULT_NUM_PREDICT)
-
 
 def get_structured_generator_cached(model_name: str, ollama_host: str = None, timeout=500):
     """
@@ -168,11 +95,9 @@ def generate_with_timing(model_name: str, prompt: str, ollama_host: str = None, 
     gen = get_structured_generator_cached(model_name, ollama_host, timeout)
     started_at = datetime.now(timezone.utc)
     
-    # Get num_predict value for this model from CSV
-    num_predict = get_num_predict_for_model(model_name, csv_file)
     
     # Generate structured response
-    response = gen(prompt, options={"num_predict": num_predict})
+    response = gen(prompt)
     
     ended_at = datetime.now(timezone.utc)
     elapsed_ms = int((ended_at - started_at).total_seconds() * 1000)

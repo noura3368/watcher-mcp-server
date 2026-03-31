@@ -1,8 +1,8 @@
 #!/bin/sh
 set -eu
 
-CONFIG="${CONFIG:-/home/nkhajehn/watcher-mcp-server/haiku.rag.yaml}"
-DB="${DB:-/home/nkhajehn/watcher-mcp-server/data/haiku.rag.lancedb}"
+CONFIG="${CONFIG:-/data/nkhajehn/watcher-mcp-server/haiku.rag.yaml}"
+DB="${DB:-/data/nkhajehn/watcher-mcp-server/data/haiku_mxbai.rag.lancedb}"
 
 if [ ! -d "$DB" ]; then
   echo "Initializing DB at $DB..."
@@ -13,13 +13,14 @@ fi
 
 python - <<'PY'
 import time, urllib.request
-url="http://docling-serve:5001/health"
+url="http://localhost:5001/health"
 for _ in range(180):
     try:
         urllib.request.urlopen(url, timeout=2).read()
         print("docling-serve ready")
         break
     except Exception:
+        print("docling serve not ready")
         time.sleep(1)
 else:
     raise SystemExit("docling-serve not ready")
@@ -27,6 +28,7 @@ PY
 if [ "$#" -gt 0 ]; then
   exec "$@"
 else
+  echo "Starting watcher.py..."
   exec python -u watcher.py
 fi
 #python /app/custom_ingest.py
