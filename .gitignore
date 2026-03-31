@@ -1,5 +1,12 @@
 failed_outputs*
 prompt*
 results*
-data*
 llm_pipeline/services/*.pyc
+data/haiku.rag.lancedb/*i
+raw_docs/*
+!raw_docs/.gitkeep
+data/*
+!data/.gitkeep
+docs_processed/*
+!docs_processed/.gitkeep
+docling_models/*
