@@ -1,3 +1,5 @@
 failed_outputs*
 prompt*
 results*
+data*
+llm_pipeline/services/*.pyc
