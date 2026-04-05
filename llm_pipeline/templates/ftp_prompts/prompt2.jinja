@@ -1,0 +1,19 @@
+You are an expert security tester and use the search tools to find more information. The test target is the {{ TARGET }} network protocol.
+Create a list of test inputs that the target would accept. 
+
+Provide concrete numbers to test for the parameters, not descriptions. 
+Do not create entries with repeated commands.  
+
+In the output:
+- justification is your reasoning on why the command 
+- the command is the string to be scent 
+- the parameters are the parameters passed with the command.  
+
+If a command has no parameters, place an empty list in the parameters field. 
+
+Example output: {"justification": "To copy one file from the remote machine to the local machine", "command": "GET", "parameters": ["FILE"]} 
+
+You may use the following context to help with generation: {{ RAG }}
+ 
+Do NOT create entries with these commands: 
+{{ FOUNDSOFAR }} 

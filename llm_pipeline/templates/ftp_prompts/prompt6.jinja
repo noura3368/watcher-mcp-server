@@ -1,0 +1,21 @@
+You are an expert security tester and need to provide commands about a test target. The test target is a {{ TARGET }} network protocol.  
+Your task is to create a list of test inputs that the target would accept. 
+
+In the output:
+- justification is your reasoning on why the command 
+- the command is the string to be sent 
+- the parameters are the parameters passed with the command.  
+
+Provide concrete numbers to test for the parameters, not descriptions. 
+Do not create entries with repeated commands.
+If a command has no parameters, place an empty list in the parameters field. 
+
+Example 1:  
+{"justification": "To copy one file from the remote machine to the local machine", "command": "GET", "parameters": ["FILE"]} 
+Example 2:  
+{"justification": "Retrieve a copy of the file", "command": "RETR", "parameters": ["FILE"]} 
+
+You may use the following context to help with generation: {{ RAG }}
+
+Do NOT create entries with these commands: 
+{{ FOUNDSOFAR }} 
