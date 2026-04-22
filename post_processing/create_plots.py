@@ -74,7 +74,7 @@ def bar_colors_for_models(
     ]
 
 
-def load_model_size_mapping(root_dir: str = "/data/nkhajehn/watcher-mcp-server/llm_pipeline/services") -> Dict[str, float]:
+def load_model_size_mapping(root_dir: str = "/data2/nkhajehn/watcher-mcp-server/llm_pipeline/services") -> Dict[str, float]:
     """Load model parameter sizes from models_combined_with_num_predict.csv.
     
     Args:
@@ -3968,6 +3968,326 @@ def create_rag_only_lowess_scatter_plots(rag_csv_path: str, output_dir: str) -> 
         frac=0.35,
     )
 
+def create_chinese_vs_nonchinese_lowess_trellis_plots(csv_path: str, output_dir: str) -> None:
+    """
+    Create trellis LOWESS plots by prompt for:
+    1. Base commands vs parameter size
+    2. Unique valid commands vs parameter size
+
+    Each subplot = one prompt.
+    Each subplot has 2 LOWESS regression lines:
+    - Chinese models
+    - Non-Chinese models
+
+    No scatter dots are drawn.
+    """
+
+    def lowess_with_confidence_band(
+        x, y, frac=0.35, n_boot=250, ci=95, grid_size=200, seed=42
+    ):
+        rng = np.random.default_rng(seed)
+
+        x = np.asarray(x, dtype=float)
+        y = np.asarray(y, dtype=float)
+
+        if len(x) < 3 or len(np.unique(x)) < 2:
+            return None, None, None, None
+
+        x_grid = np.linspace(x.min(), x.max(), grid_size)
+
+        fit = lowess(y, x, frac=frac, return_sorted=True)
+        y_center = np.interp(x_grid, fit[:, 0], fit[:, 1])
+
+        n = len(x)
+        boots = np.empty((n_boot, grid_size), dtype=float)
+
+        for b in range(n_boot):
+            idx = rng.integers(0, n, size=n)
+            xb, yb = x[idx], y[idx]
+
+            if len(np.unique(xb)) < 2:
+                boots[b] = y_center
+                continue
+
+            fit_b = lowess(yb, xb, frac=frac, return_sorted=True)
+            boots[b] = np.interp(x_grid, fit_b[:, 0], fit_b[:, 1])
+
+        alpha = (100 - ci) / 2
+        y_lo = np.percentile(boots, alpha, axis=0)
+        y_hi = np.percentile(boots, 100 - alpha, axis=0)
+
+        return x_grid, y_center, y_lo, y_hi
+
+    def parse_base_count(base_set_str: str) -> int:
+        s = (base_set_str or "").strip()
+        if s in ("", "set()", "{}"):
+            return 0
+
+        try:
+            parsed = ast.literal_eval(s)
+            if isinstance(parsed, (set, list, tuple)):
+                return len(set(parsed))
+            if isinstance(parsed, dict):
+                return len(parsed)
+        except Exception:
+            pass
+
+        items = re.findall(r"'([^']*)'|\"([^\"]*)\"", s)
+        vals = [a or b for a, b in items]
+        return len(set(vals))
+
+    def add_group_lowess_to_subplot(
+        fig: go.Figure,
+        group_df: pd.DataFrame,
+        group_name: str,
+        color: str,
+        y_col: str,
+        row: int,
+        col: int,
+        showlegend: bool,
+    ) -> None:
+        fit_df = group_df[(group_df["param_size"] > 0) & (group_df[y_col] > 0)].copy()
+
+        if len(fit_df) < 4 or fit_df["param_size"].nunique() < 2:
+            return
+
+        x = fit_df["param_size"].to_numpy(float)
+        y = fit_df[y_col].to_numpy(float)
+
+        x_grid, y_center, y_lo, y_hi = lowess_with_confidence_band(
+            x, y, frac=0.35, n_boot=250, ci=95, grid_size=200, seed=42
+        )
+
+        if x_grid is None:
+            return
+
+        fig.add_trace(
+            go.Scatter(
+                x=np.concatenate([x_grid, x_grid[::-1]]),
+                y=np.concatenate([y_hi, y_lo[::-1]]),
+                fill="toself",
+                fillcolor=color,
+                opacity=0.12,
+                line=dict(color="rgba(0,0,0,0)"),
+                hoverinfo="skip",
+                showlegend=False,
+                name=f"{group_name} CI",
+            ),
+            row=row,
+            col=col,
+        )
+
+        fig.add_trace(
+            go.Scatter(
+                x=x_grid,
+                y=y_center,
+                mode="lines",
+                line=dict(color=color, width=3),
+                name=group_name,
+                showlegend=showlegend,
+                hovertemplate=(
+                    f"{group_name}<br>"
+                    "Parameter Size=%{x:.2f}B<br>"
+                    "LOWESS=%{y:.2f}<extra></extra>"
+                ),
+            ),
+            row=row,
+            col=col,
+        )
+
+    def make_trellis_plot(
+        df_in: pd.DataFrame,
+        y_col: str,
+        y_title: str,
+        title: str,
+        html_name: str,
+        png_name: str,
+    ) -> None:
+        if df_in.empty:
+            print(f"Skipping {title}: no data.")
+            return
+
+        prompts = sorted(df_in["prompt"].dropna().unique().tolist())
+        if not prompts:
+            print(f"Skipping {title}: no prompts found.")
+            return
+
+        n_prompts = len(prompts)
+        n_cols = 3
+        n_rows = int(np.ceil(n_prompts / n_cols))
+
+        fig = make_subplots(
+            rows=n_rows,
+            cols=n_cols,
+            subplot_titles=prompts,
+            vertical_spacing=0.10,
+            horizontal_spacing=0.07,
+        )
+
+        line_colors = {
+            True: "rgba(214,39,40,1.0)",    # Chinese
+            False: "rgba(31,119,180,1.0)",  # Non-Chinese
+        }
+        label_map = {
+            True: "Chinese",
+            False: "Non-Chinese",
+        }
+
+        for i, prompt in enumerate(prompts):
+            row = i // n_cols + 1
+            col = i % n_cols + 1
+
+            prompt_df = df_in[df_in["prompt"] == prompt].copy()
+            if prompt_df.empty:
+                continue
+
+            for is_chinese, g in prompt_df.groupby("is_chinese"):
+                label = label_map[bool(is_chinese)]
+                add_group_lowess_to_subplot(
+                    fig=fig,
+                    group_df=g,
+                    group_name=label,
+                    color=line_colors[bool(is_chinese)],
+                    y_col=y_col,
+                    row=row,
+                    col=col,
+                    showlegend=(i == 0),
+                )
+
+            fig.update_xaxes(
+                title_text="Parameter size (B)",
+                showgrid=True,
+                gridcolor="lightgray",
+                zeroline=False,
+                row=row,
+                col=col,
+            )
+            fig.update_yaxes(
+                title_text=y_title,
+                showgrid=True,
+                gridcolor="lightgray",
+                zeroline=False,
+                row=row,
+                col=col,
+            )
+
+        fig.update_layout(
+            title=title,
+            template="plotly_white",
+            paper_bgcolor="white",
+            plot_bgcolor="white",
+            height=max(900, 350 * n_rows),
+            width=1600,
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1,
+            ),
+            margin=dict(t=100, b=50, l=50, r=50),
+        )
+
+        output_subdir = os.path.join(output_dir, "regression_line_graph")
+        os.makedirs(output_subdir, exist_ok=True)
+
+        html_path = os.path.join(output_subdir, html_name)
+        write_html(fig, html_path)
+        print(f"Created trellis Chinese vs non-Chinese LOWESS plot: {html_path}")
+
+        try:
+            png_path = os.path.join(output_subdir, png_name)
+            fig.write_image(png_path, width=1800, height=max(900, 350 * n_rows), scale=2)
+        except Exception as e:
+            print(f"Warning: could not write PNG for {html_path}: {e}")
+
+    param_size_map = load_model_size_mapping()
+    model_to_is_chinese = load_model_to_is_chinese(csv_path)
+
+    if model_to_is_chinese is None:
+        print("Skipping Chinese vs non-Chinese LOWESS plots: is_chinese column missing.")
+        return
+
+    final_base_by_prompt_run_model: Dict[Tuple[str, int, str], Tuple[int, str]] = {}
+    final_unique_valid_by_prompt_run_model: Dict[Tuple[str, int, str], Tuple[int, int]] = {}
+
+    try:
+        with open(csv_path, "r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+
+            for row in reader:
+                prompt = (row.get("prompt") or "").strip()
+                model = (row.get("model") or "").strip()
+
+                if not prompt or not model:
+                    continue
+
+                try:
+                    run_number = int(row.get("run_number", 0))
+                    iteration = int(row.get("iteration", 0))
+                    unique_valid = int(row.get("unique_valid_commands", 0))
+                except (ValueError, TypeError):
+                    continue
+
+                if run_number <= 0 or iteration <= 0:
+                    continue
+
+                key = (prompt, run_number, model)
+                base_set_str = row.get("base_commands_seen_so_far", "")
+
+                if key not in final_base_by_prompt_run_model:
+                    final_base_by_prompt_run_model[key] = (iteration, base_set_str)
+                    final_unique_valid_by_prompt_run_model[key] = (iteration, unique_valid)
+                else:
+                    prev_iter, _ = final_base_by_prompt_run_model[key]
+                    if iteration == 50 or (iteration > prev_iter and prev_iter != 50):
+                        final_base_by_prompt_run_model[key] = (iteration, base_set_str)
+                        final_unique_valid_by_prompt_run_model[key] = (iteration, unique_valid)
+
+    except Exception as e:
+        print(f"Error reading CSV file {csv_path}: {e}")
+        return
+
+    rows = []
+    for key, (iteration, base_set_str) in final_base_by_prompt_run_model.items():
+        prompt, run_number, model = key
+        param_size = float(param_size_map.get(model, 0.0))
+        if param_size <= 0:
+            continue
+
+        rows.append({
+            "prompt": prompt,
+            "run_number": run_number,
+            "model": model,
+            "param_size": param_size,
+            "is_chinese": bool(model_to_is_chinese.get(model, False)),
+            "base_count": parse_base_count(base_set_str),
+            "unique_valid": final_unique_valid_by_prompt_run_model[key][1],
+        })
+
+    if not rows:
+        print("Skipping Chinese vs non-Chinese LOWESS plots: no usable rows.")
+        return
+
+    df = pd.DataFrame(rows)
+
+    make_trellis_plot(
+        df_in=df,
+        y_col="base_count",
+        y_title="Base Commands Generated",
+        title="Chinese vs Non-Chinese LOWESS by Prompt: Base Commands",
+        html_name="rag_chinese_vs_nonchinese_lowess_trellis_base_commands.html",
+        png_name="rag_chinese_vs_nonchinese_lowess_trellis_base_commands.png",
+    )
+
+    make_trellis_plot(
+        df_in=df,
+        y_col="unique_valid",
+        y_title="Unique Valid Commands Generated",
+        title="Chinese vs Non-Chinese LOWESS by Prompt: Unique Valid Commands",
+        html_name="rag_chinese_vs_nonchinese_lowess_trellis_unique_valid.html",
+        png_name="rag_chinese_vs_nonchinese_lowess_trellis_unique_valid.png",
+    )
 
 def create_norag_vs_rag_success_failure_plots(no_rag_csv_path: str, rag_csv_path: str, output_dir: str, model_to_is_coding: Optional[Dict[str, bool]] = None) -> None:
     """Create grouped stacked bar charts comparing successful vs failed iterations between NO_RAG and RAG experiments.
@@ -5671,6 +5991,8 @@ def main(
     create_average_iteration_duration_plots(csv_path, output_dir, model_to_is_coding=model_to_is_coding)
     print("\nCreating RAG-only LOWESS scatter plots...")
     create_rag_only_lowess_scatter_plots(csv_path, output_dir)
+    print("\nCreating Chinese vs non-Chinese LOWESS scatter plots...")
+    create_chinese_vs_nonchinese_lowess_trellis_plots(csv_path, output_dir)
     print("\nCreating average iteration duration scatter plots with jitter...")
     create_average_iteration_duration_scatter_plots(csv_path, output_dir)
     print("\nCreating Chinese vs non-Chinese LOWESS scatter plots...")
@@ -5707,7 +6029,7 @@ def main(
     #create_failure_blanks_plots(rag_csv_path, no_rag_csv_path, output_dir, model_to_is_coding=model_to_is_coding)
 
 if __name__ == "__main__":
-    ROOT_DIR = "/data/nkhajehn/watcher-mcp-server/"
+    ROOT_DIR = "/data2/nkhajehn/watcher-mcp-server/"
     DEFAULT_OUTPUT_DIR = os.path.join(ROOT_DIR, "post_processing", "plots")
     #default_csv = os.path.join(DEFAULT_OUTPUT_DIR, "RAG_KORAD_results.csv")
 
@@ -5719,7 +6041,7 @@ if __name__ == "__main__":
     cca_parser.add_argument("--output", default=DEFAULT_OUTPUT_DIR, help="Output directory for plots")
 
     args = parser.parse_args()
-    csv_path = os.path.join(DEFAULT_OUTPUT_DIR, "FTP_rag_results.csv")
+    csv_path = os.path.join(DEFAULT_OUTPUT_DIR, "RAG_KORAD_results.csv")
     output_dir = DEFAULT_OUTPUT_DIR
     model_to_is_coding: Optional[Dict[str, bool]] = None
 

@@ -13,9 +13,9 @@ from scipy.stats import mannwhitneyu
 # Constants
 # ---------------------------------------------------------------------------
 
-CSV_PATH = "/data2/nkhajehn/watcher-mcp-server/post_processing/plots/RAG_KORAD_results.csv"
+#CSV_PATH = "/data2/nkhajehn/watcher-mcp-server/post_processing/plots/RAG_KORAD_results.csv"
 OUTPUT_DIR = "/data2/nkhajehn/watcher-mcp-server/llm_pipeline/hypothesis_testing/csv_files"
-
+CSV_PATH = "/data2/nkhajehn/MCP-Command-Generation/post_processing/plots/RAG_KORAD_results.csv"
 THRESHOLDS = [14, 16, 18, 20, 22, 24, 26, 28, 30, 32]
 WHOLE_MODEL_THRESHOLD = 10
 
@@ -84,7 +84,7 @@ def load_base_commands_data(csv_path: str) -> Dict[Tuple, int]:
 
                 parameter_count  = row.get("parameter_count", "").strip()
                 is_code_model    = row.get("is_coding_model", "False").strip()
-                is_chinese_model = row.get("is_chinese",      "False").strip()
+                is_chinese_model = row.get("is_chinese", "False").strip()
 
                 base_count = len(parse_base_set(row.get("base_commands_seen_so_far", "")))
                 key = (prompt, model, parameter_count, run_number, is_code_model, is_chinese_model)
