@@ -74,7 +74,7 @@ def bar_colors_for_models(
     ]
 
 
-def load_model_size_mapping(root_dir: str = "/data2/nkhajehn/watcher-mcp-server/llm_pipeline/services") -> Dict[str, float]:
+def load_model_size_mapping(root_dir: str = "/data/nkhajehn/watcher-mcp-server/llm_pipeline/services") -> Dict[str, float]:
     """Load model parameter sizes from models_combined_with_num_predict.csv.
     
     Args:
@@ -198,6 +198,268 @@ def create_average_valid_per_model_plots(csv_path: str, output_dir: str, model_t
         output_path = os.path.join(avg_dir, f"{prompt}.html")
         write_html(fig, output_path)
         print(f"Created average-valid plot: {output_path}")
+
+
+def load_model_to_is_chinese(csv_path: str) -> Optional[Dict[str, bool]]:
+    """Load model -> is_chinese mapping from CSV.
+
+    Returns dict mapping model name to True/False if CSV has is_chinese column;
+    returns None if column is missing or on error.
+    """
+    try:
+        with open(csv_path, "r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            fieldnames = reader.fieldnames or []
+            if "is_chinese" not in fieldnames:
+                return None
+
+            result: Dict[str, bool] = {}
+            for row in reader:
+                model = (row.get("model") or "").strip()
+                if not model or model in result:
+                    continue
+
+                raw = row.get("is_chinese", "")
+                if isinstance(raw, bool):
+                    result[model] = raw
+                else:
+                    result[model] = str(raw).strip().lower() in ("true", "1", "yes", "on")
+            return result if result else None
+    except Exception as e:
+        print(f"Warning: Could not load is_chinese from {csv_path}: {e}")
+        return None
+
+
+def create_chinese_vs_nonchinese_lowess_plots(csv_path: str, output_dir: str) -> None:
+    """
+    Create two LOWESS scatter plots using only RAG results:
+    1. Base commands vs parameter size
+    2. Unique valid commands vs parameter size
+
+    Each plot has:
+    - one line for Chinese models
+    - one line for non-Chinese models
+    - scatter points colored by group
+    - bootstrap confidence bands
+    """
+    def lowess_with_confidence_band(
+        x, y, frac=0.35, n_boot=250, ci=95, grid_size=200, seed=42
+    ):
+        rng = np.random.default_rng(seed)
+
+        x = np.asarray(x, dtype=float)
+        y = np.asarray(y, dtype=float)
+
+        x_grid = np.linspace(x.min(), x.max(), grid_size)
+
+        fit = lowess(y, x, frac=frac, return_sorted=True)
+        y_center = np.interp(x_grid, fit[:, 0], fit[:, 1])
+
+        n = len(x)
+        boots = np.empty((n_boot, grid_size), dtype=float)
+
+        for b in range(n_boot):
+            idx = rng.integers(0, n, size=n)
+            xb, yb = x[idx], y[idx]
+            fit_b = lowess(yb, xb, frac=frac, return_sorted=True)
+            boots[b] = np.interp(x_grid, fit_b[:, 0], fit_b[:, 1])
+
+        alpha = (100 - ci) / 2
+        y_lo = np.percentile(boots, alpha, axis=0)
+        y_hi = np.percentile(boots, 100 - alpha, axis=0)
+        return x_grid, y_center, y_lo, y_hi
+
+    def parse_base_count(base_set_str: str) -> int:
+        s = (base_set_str or "").strip()
+        if s in ("", "set()", "{}"):
+            return 0
+
+        try:
+            parsed = ast.literal_eval(s)
+            if isinstance(parsed, (set, list, tuple)):
+                return len(set(parsed))
+            if isinstance(parsed, dict):
+                return len(parsed)
+        except Exception:
+            pass
+
+        items = re.findall(r"'([^']*)'|\"([^\"]*)\"", s)
+        vals = [a or b for a, b in items]
+        return len(set(vals))
+
+    def add_lowess_group(fig: go.Figure, group_df: pd.DataFrame, group_name: str, color: str, y_col: str):
+        fit_df = group_df[(group_df["param_size"] > 0) & (group_df[y_col] > 0)].copy()
+        if len(fit_df) < 8:
+            print(f"Skipping LOWESS for {group_name} on {y_col}: not enough points.")
+            return
+
+        x = fit_df["param_size"].to_numpy(float)
+        y = fit_df[y_col].to_numpy(float)
+
+        x_grid, y_center, y_lo, y_hi = lowess_with_confidence_band(
+            x, y, frac=0.35, n_boot=250, ci=95, grid_size=200, seed=42
+        )
+
+        fig.add_trace(go.Scatter(
+            x=np.concatenate([x_grid, x_grid[::-1]]),
+            y=np.concatenate([y_hi, y_lo[::-1]]),
+            fill="toself",
+            fillcolor=color,
+            opacity=0.14,
+            line=dict(color="rgba(0,0,0,0)"),
+            hoverinfo="skip",
+            name=f"{group_name} 95% CI",
+            showlegend=False,
+        ))
+
+        fig.add_trace(go.Scatter(
+            x=x_grid,
+            y=y_center,
+            mode="lines",
+            line=dict(color=color, width=4),
+            name=group_name,
+            hovertemplate="Parameter Size=%{x:.2f}B<br>LOWESS=%{y:.2f}<extra></extra>",
+        ))
+
+    def make_plot(df_in: pd.DataFrame, y_col: str, y_title: str, title: str, out_name: str) -> None:
+        plot_df = df_in.copy()
+        if plot_df.empty:
+            print(f"Skipping {title}: no data.")
+            return
+
+        fig = go.Figure()
+
+        line_colors = {
+            True: "rgb(214,39,40)",
+            False: "rgb(31,119,180)",
+        }
+        label_map = {
+            True: "Chinese",
+            False: "Non-Chinese",
+        }
+        for is_chinese, g in plot_df.groupby("is_chinese"):
+            label = label_map[bool(is_chinese)]
+
+            add_lowess_group(
+                fig=fig,
+                group_df=g,
+                group_name=label,
+                color=line_colors[bool(is_chinese)],
+                y_col=y_col,
+            )
+        fig.update_layout(
+            title=title,
+            xaxis_title="Parameter size (B)",
+            yaxis_title=y_title,
+            template="plotly_white",
+            paper_bgcolor="white",
+            plot_bgcolor="white",
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        )
+        fig.update_xaxes(showgrid=True, gridcolor="lightgray", zeroline=False)
+        fig.update_yaxes(showgrid=True, gridcolor="lightgray", zeroline=False)
+
+        output_subdir = os.path.join(output_dir, "regression_line_graph")
+        os.makedirs(output_subdir, exist_ok=True)
+
+        output_path = os.path.join(output_subdir, out_name)
+        write_html(fig, output_path)
+        print(f"Created Chinese vs non-Chinese LOWESS plot: {output_path}")
+
+        try:
+            png_path = output_path.replace(".html", ".png")
+            fig.write_image(png_path, width=1400, height=900, scale=2)
+        except Exception as e:
+            print(f"Warning: could not write PNG for {output_path}: {e}")
+
+    param_size_map = load_model_size_mapping()
+    model_to_is_chinese = load_model_to_is_chinese(csv_path)
+
+    if model_to_is_chinese is None:
+        print("Skipping Chinese vs non-Chinese LOWESS plots: is_chinese column missing.")
+        return
+
+    final_base_by_prompt_run_model: Dict[Tuple[str, int, str], Tuple[int, str]] = {}
+    final_unique_valid_by_prompt_run_model: Dict[Tuple[str, int, str], Tuple[int, int]] = {}
+
+    try:
+        with open(csv_path, "r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+
+            for row in reader:
+                prompt = (row.get("prompt") or "").strip()
+                model = (row.get("model") or "").strip()
+
+                if not prompt or not model:
+                    continue
+
+                try:
+                    run_number = int(row.get("run_number", 0))
+                    iteration = int(row.get("iteration", 0))
+                    unique_valid = int(row.get("unique_valid_commands", 0))
+                except (ValueError, TypeError):
+                    continue
+
+                if run_number <= 0 or iteration <= 0:
+                    continue
+
+                key = (prompt, run_number, model)
+                base_set_str = row.get("base_commands_seen_so_far", "")
+
+                if key not in final_base_by_prompt_run_model:
+                    final_base_by_prompt_run_model[key] = (iteration, base_set_str)
+                    final_unique_valid_by_prompt_run_model[key] = (iteration, unique_valid)
+                else:
+                    prev_iter, _ = final_base_by_prompt_run_model[key]
+                    if iteration == 50 or (iteration > prev_iter and prev_iter != 50):
+                        final_base_by_prompt_run_model[key] = (iteration, base_set_str)
+                        final_unique_valid_by_prompt_run_model[key] = (iteration, unique_valid)
+
+    except Exception as e:
+        print(f"Error reading CSV file {csv_path}: {e}")
+        return
+
+    rows = []
+    for key, (iteration, base_set_str) in final_base_by_prompt_run_model.items():
+        prompt, run_number, model = key
+        param_size = float(param_size_map.get(model, 0.0))
+        if param_size <= 0:
+            continue
+
+        rows.append({
+            "prompt": prompt,
+            "run_number": run_number,
+            "model": model,
+            "param_size": param_size,
+            "is_chinese": bool(model_to_is_chinese.get(model, False)),
+            "base_count": parse_base_count(base_set_str),
+            "unique_valid": final_unique_valid_by_prompt_run_model[key][1],
+        })
+
+    if not rows:
+        print("Skipping Chinese vs non-Chinese LOWESS plots: no usable rows.")
+        return
+
+    df = pd.DataFrame(rows)
+
+    rng = np.random.default_rng(42)
+    df["param_jitter"] = df["param_size"] * (1 + rng.uniform(-0.05, 0.05, size=len(df)))
+
+    make_plot(
+        df_in=df,
+        y_col="base_count",
+        y_title="Base Commands Generated",
+        title="RAG Only: Chinese vs Non-Chinese Models (Base Commands)",
+        out_name="rag_chinese_vs_nonchinese_lowess_base_commands.html",
+    )
+
+    make_plot(
+        df_in=df,
+        y_col="unique_valid",
+        y_title="Unique Valid Commands Generated",
+        title="RAG Only: Chinese vs Non-Chinese Models (Unique Valid Commands)",
+        out_name="rag_chinese_vs_nonchinese_lowess_unique_valid.html",
+    )
 
 
 def create_validity_ratio_plots(csv_path: str, output_dir: str, model_to_is_coding: Optional[Dict[str, bool]] = None) -> None:
@@ -936,7 +1198,7 @@ def create_cumulative_valid_unique_plots(csv_path: str, output_dir: str, model_t
         csv_path: Path to command_statistics CSV file
         output_dir: Base output directory (files will be saved in plots/cumulative_valid_unique subdirectory)
     """
-    output_subdir = os.path.join(output_dir, "plots", "cumulative_valid_unique")
+    output_subdir = os.path.join(output_dir, "cumulative_valid_unique")
     os.makedirs(output_subdir, exist_ok=True)
     
     # Track total valid_commands per (prompt, run, model) - sum across all iterations
@@ -1149,7 +1411,7 @@ def create_cumulative_valid_unique_stacked_plots(csv_path: str, output_dir: str,
         csv_path: Path to command_statistics CSV file
         output_dir: Base output directory (files will be saved in plots/cumulative_valid_unique_stacked subdirectory)
     """
-    output_subdir = os.path.join(output_dir, "plots", "cumulative_valid_unique_stacked")
+    output_subdir = os.path.join(output_dir, "cumulative_valid_unique_stacked")
     os.makedirs(output_subdir, exist_ok=True)
     
     # Track total valid_commands per (prompt, run, model) - sum across all iterations
@@ -1637,7 +1899,7 @@ def create_base_commands_comparison_plot(csv_path: str, output_dir: str, model_t
         csv_path: Path to command_statistics CSV file
         output_dir: Base output directory (file will be saved in plots/base_commands_comparison subdirectory)
     """
-    output_subdir = os.path.join(output_dir, "plots", "base_commands_comparison")
+    output_subdir = os.path.join(output_dir, "base_commands_comparison")
     os.makedirs(output_subdir, exist_ok=True)
     
     # Target prompts
@@ -1775,206 +2037,6 @@ def create_base_commands_comparison_plot(csv_path: str, output_dir: str, model_t
     output_path = os.path.join(output_subdir, "prompt2_prompt6_prompt7_comparison.html")
     write_html(fig, output_path)
     print(f"Created base commands comparison plot: {output_path}")
-
-
-def create_shot_type_comparison_plot(csv_path: str, output_dir: str, model_to_is_coding: Optional[Dict[str, bool]] = None) -> None:
-    """Create a grouped bar chart comparing average base commands for 0-shot, 1-shot, and 2-shot prompting.
-    
-    Groups prompts by shot type:
-    - 0-shot: prompt5, prompt7, security-incremental-1 (if exists)
-    - 1-shot: prompt1, prompt2, prompt3, prompt4
-    - 2-shot: prompt6
-    
-    For each model, collects all base command counts from all runs and all prompts in each group,
-    then averages those values to get a single average per shot type.
-    
-    Creates a single HTML file with a grouped bar chart showing:
-    - X-axis: models (sorted)
-    - Y-axis: average number of base commands (across all runs and prompts in group)
-    - 3 bars per model: one for 0-shot, one for 1-shot, one for 2-shot
-    
-    Args:
-        csv_path: Path to command_statistics CSV file
-        output_dir: Base output directory (file will be saved in plots/shot_type_comparison subdirectory)
-    """
-    output_subdir = os.path.join(output_dir, "plots", "shot_type_comparison")
-    os.makedirs(output_subdir, exist_ok=True)
-    
-    # Define prompt groups by shot type
-    zero_shot_prompts = {"prompt5", "prompt7", "security-incremental-1"}
-    one_shot_prompts = {"prompt1", "prompt2", "prompt3", "prompt4"}
-    two_shot_prompts = {"prompt6"}
-    
-    # Map (prompt, run, model) -> (iteration, set_string)
-    final_base_by_prompt_run_model: Dict[Tuple[str, int, str], Tuple[int, str]] = {}
-    prompts: Set[str] = set()
-    runs: Set[int] = set()
-    
-    # Helper function to parse set string
-    def parse_base_set(set_str: str) -> Set[str]:
-        """Parse base_commands_seen_so_far string into a set of commands."""
-        s = (set_str or "").strip()
-        if s == "set()" or s == "{}" or s == "":
-            return set()
-        else:
-            # extract quoted items
-            items = re.findall(r"'([^']*)'|\"([^\"]*)\"", s)
-            return set([a or b for a, b in items])
-    
-    try:
-        with open(csv_path, "r", encoding="utf-8") as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                prompt = row.get("prompt", "").strip()
-                if not prompt:
-                    continue
-                
-                try:
-                    run_number = int(row.get("run_number", 0))
-                except Exception:
-                    run_number = 0
-                try:
-                    iteration = int(row.get("iteration", 0))
-                except Exception:
-                    iteration = 0
-                model = row.get("model", "").strip()
-                if not model:
-                    continue
-                
-                # read raw set string
-                base_set_str = row.get("base_commands_seen_so_far", "")
-                
-                key = (prompt, run_number, model)
-                # prefer exact iteration 50; otherwise take the max iteration
-                if key not in final_base_by_prompt_run_model:
-                    final_base_by_prompt_run_model[key] = (iteration, base_set_str)
-                else:
-                    prev_iter, _ = final_base_by_prompt_run_model[key]
-                    # prefer iteration 50 if seen, otherwise keep the max
-                    if iteration == 50 or (iteration > prev_iter and prev_iter != 50):
-                        final_base_by_prompt_run_model[key] = (iteration, base_set_str)
-                
-                prompts.add(prompt)
-                runs.add(run_number)
-    except Exception as e:
-        print(f"Error reading CSV file {csv_path}: {e}")
-        return
-    
-    # Get all models that appear in any of the target prompts
-    models_set: Set[str] = set()
-    all_target_prompts = zero_shot_prompts | one_shot_prompts | two_shot_prompts
-    for (p, r, m) in final_base_by_prompt_run_model.keys():
-        if p in all_target_prompts:
-            models_set.add(m)
-    
-    models = sorted(models_set)
-    if not models:
-        print("No models found for shot type comparison prompts.")
-        return
-    
-    # Load model size mapping
-    model_size_map = load_model_size_mapping()
-    
-    # Split models by parameter size
-    models_le_4b = []
-    models_gt_4b = []
-    
-    for model in models:
-        param_size = model_size_map.get(model, 0.0)
-        if param_size <= 4.0:
-            models_le_4b.append(model)
-        elif param_size > 4.0:
-            models_gt_4b.append(model)
-        # Skip models not found in mapping
-    
-    # Helper function to create plot for a group of models
-    def create_plot_for_models(model_list: List[str], size_label: str, filename_suffix: str) -> None:
-        if not model_list:
-            return
-        
-        # Calculate averages for each model and each shot type group
-        # For each model, collect ALL base command counts from ALL runs and ALL prompts in each group,
-        # then average all those values together
-        avg_zero_shot = []
-        avg_one_shot = []
-        avg_two_shot = []
-        
-        for model in model_list:
-            # Collect all base command counts for 0-shot group (all runs, all prompts in group)
-            zero_shot_counts = []
-            for prompt in zero_shot_prompts:
-                for run in sorted(runs):
-                    key = (prompt, run, model)
-                    if key in final_base_by_prompt_run_model:
-                        _, set_str = final_base_by_prompt_run_model[key]
-                        parsed_set = parse_base_set(set_str)
-                        zero_shot_counts.append(len(parsed_set))
-            
-            # Calculate average across all collected values
-            avg_zero = sum(zero_shot_counts) / len(zero_shot_counts) if zero_shot_counts else 0.0
-            avg_zero_shot.append(avg_zero)
-            
-            # Collect all base command counts for 1-shot group (all runs, all prompts in group)
-            one_shot_counts = []
-            for prompt in one_shot_prompts:
-                for run in sorted(runs):
-                    key = (prompt, run, model)
-                    if key in final_base_by_prompt_run_model:
-                        _, set_str = final_base_by_prompt_run_model[key]
-                        parsed_set = parse_base_set(set_str)
-                        one_shot_counts.append(len(parsed_set))
-            
-            # Calculate average across all collected values
-            avg_one = sum(one_shot_counts) / len(one_shot_counts) if one_shot_counts else 0.0
-            avg_one_shot.append(avg_one)
-            
-            # Collect all base command counts for 2-shot group (all runs, all prompts in group)
-            two_shot_counts = []
-            for prompt in two_shot_prompts:
-                for run in sorted(runs):
-                    key = (prompt, run, model)
-                    if key in final_base_by_prompt_run_model:
-                        _, set_str = final_base_by_prompt_run_model[key]
-                        parsed_set = parse_base_set(set_str)
-                        two_shot_counts.append(len(parsed_set))
-            
-            # Calculate average across all collected values
-            avg_two = sum(two_shot_counts) / len(two_shot_counts) if two_shot_counts else 0.0
-            avg_two_shot.append(avg_two)
-        
-        # Create grouped bar chart
-        fig = go.Figure()
-        bar_colors = bar_colors_for_models(model_list, model_to_is_coding) if (model_to_is_coding and model_list) else None
-        kw1: Dict[str, object] = dict(name="0-shot", x=model_list, y=avg_zero_shot, text=[f"{v:.2f}" for v in avg_zero_shot], textposition="outside", hovertemplate="Model=%{x}<br>Shot Type=0-shot<br>Avg Base Commands=%{y:.2f}<extra></extra>")
-        if bar_colors:
-            kw1["marker_color"] = bar_colors
-        fig.add_trace(go.Bar(**kw1))
-        kw2: Dict[str, object] = dict(name="1-shot", x=model_list, y=avg_one_shot, text=[f"{v:.2f}" for v in avg_one_shot], textposition="outside", hovertemplate="Model=%{x}<br>Shot Type=1-shot<br>Avg Base Commands=%{y:.2f}<extra></extra>")
-        if bar_colors:
-            kw2["marker_color"] = bar_colors
-        fig.add_trace(go.Bar(**kw2))
-        kw3: Dict[str, object] = dict(name="2-shot", x=model_list, y=avg_two_shot, text=[f"{v:.2f}" for v in avg_two_shot], textposition="outside", hovertemplate="Model=%{x}<br>Shot Type=2-shot<br>Avg Base Commands=%{y:.2f}<extra></extra>")
-        if bar_colors:
-            kw3["marker_color"] = bar_colors
-        fig.add_trace(go.Bar(**kw3))
-        
-        fig.update_xaxes(title_text="Model", tickangle=-45)
-        fig.update_yaxes(title_text="Average Number of Base Commands (Across All Runs and Prompts in Group)")
-        fig.update_layout(
-            title_text=f"Shot Type Comparison: Average Base Commands (0-shot vs 1-shot vs 2-shot) ({size_label})",
-            template="plotly_white",
-            barmode="group",
-            height=700,
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        )
-        
-        output_path = os.path.join(output_subdir, f"shot_type_comparison{filename_suffix}.html")
-        write_html(fig, output_path)
-        print(f"Created shot type comparison plot: {output_path}")
-    
-    # Create plots for both groups
-    create_plot_for_models(models_le_4b, "<=4B", "_le4b")
-    create_plot_for_models(models_gt_4b, ">4B", "_gt4b")
 
 
 def create_cumulative_time_series(csv_path: str, output_dir: str) -> None:
@@ -3685,6 +3747,227 @@ def create_norag_vs_rag_blanks_and_formatting_plots(
     write_html(fig_fmt, fmt_path)
     print(f"Created formatting violations NO_RAG vs RAG plot: {fmt_path}")
 
+def create_rag_only_lowess_scatter_plots(rag_csv_path: str, output_dir: str) -> None:
+    """
+    Create RAG-only scatter plots with LOWESS regression + bootstrap confidence bands for:
+    1. Base commands vs parameter size
+    2. Unique valid commands vs parameter size
+
+    Each point is one (prompt, run, model) final result, using iteration 50 if present,
+    otherwise the maximum iteration for that (prompt, run, model).
+    """
+    def lowess_with_confidence_band(x, y, frac=0.35, n_boot=250, ci=95, grid_size=200, seed=42):
+        rng = np.random.default_rng(seed)
+
+        x = np.asarray(x, dtype=float)
+        y = np.asarray(y, dtype=float)
+
+        x_grid = np.linspace(x.min(), x.max(), grid_size)
+
+        fit = lowess(y, x, frac=frac, return_sorted=True)
+        y_center = np.interp(x_grid, fit[:, 0], fit[:, 1])
+
+        n = len(x)
+        boots = np.empty((n_boot, grid_size), dtype=float)
+
+        for b in range(n_boot):
+            idx = rng.integers(0, n, size=n)
+            xb, yb = x[idx], y[idx]
+            fit_b = lowess(yb, xb, frac=frac, return_sorted=True)
+            boots[b] = np.interp(x_grid, fit_b[:, 0], fit_b[:, 1])
+
+        alpha = (100 - ci) / 2
+        y_lo = np.percentile(boots, alpha, axis=0)
+        y_hi = np.percentile(boots, 100 - alpha, axis=0)
+
+        return x_grid, y_center, y_lo, y_hi
+
+    def parse_base_count(base_set_str: str) -> int:
+        s = (base_set_str or "").strip()
+        if s in ("", "set()", "{}"):
+            return 0
+        try:
+            parsed = ast.literal_eval(s)
+            if isinstance(parsed, (set, list, tuple)):
+                return len(set(parsed))
+            if isinstance(parsed, dict):
+                return len(parsed.keys())
+        except Exception:
+            pass
+
+        items = re.findall(r"'([^']*)'|\"([^\"]*)\"", s)
+        vals = [a or b for a, b in items]
+        return len(set(vals))
+
+    output_subdir = os.path.join(output_dir, "regression_line_graph")
+    os.makedirs(output_subdir, exist_ok=True)
+
+    param_size_map = load_model_size_mapping()
+
+    final_base_by_prompt_run_model: Dict[Tuple[str, int, str], Tuple[int, str]] = {}
+    final_unique_valid_by_prompt_run_model: Dict[Tuple[str, int, str], Tuple[int, int]] = {}
+
+    try:
+        with open(rag_csv_path, "r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+
+            for row in reader:
+                prompt = row.get("prompt", "").strip()
+                model = row.get("model", "").strip()
+
+                if not prompt or not model or prompt == "security-incremental-1":
+                    continue
+
+                try:
+                    run_number = int(row.get("run_number", 0))
+                    iteration = int(row.get("iteration", 0))
+                    unique_valid = int(row.get("unique_valid_commands", 0))
+                except (ValueError, TypeError):
+                    continue
+
+                if run_number <= 0 or iteration <= 0:
+                    continue
+
+                key = (prompt, run_number, model)
+                base_set_str = row.get("base_commands_seen_so_far", "")
+
+                if key not in final_base_by_prompt_run_model:
+                    final_base_by_prompt_run_model[key] = (iteration, base_set_str)
+                    final_unique_valid_by_prompt_run_model[key] = (iteration, unique_valid)
+                else:
+                    prev_iter, _ = final_base_by_prompt_run_model[key]
+                    if iteration == 50 or (iteration > prev_iter and prev_iter != 50):
+                        final_base_by_prompt_run_model[key] = (iteration, base_set_str)
+                        final_unique_valid_by_prompt_run_model[key] = (iteration, unique_valid)
+
+    except Exception as e:
+        print(f"Error reading RAG CSV file {rag_csv_path}: {e}")
+        return
+
+    rows = []
+    for key, (iteration, base_set_str) in final_base_by_prompt_run_model.items():
+        prompt, run_number, model = key
+        param_size = float(param_size_map.get(model, 0.0))
+        if param_size <= 0:
+            continue
+
+        base_count = parse_base_count(base_set_str)
+        unique_valid = final_unique_valid_by_prompt_run_model[key][1]
+
+        rows.append({
+            "prompt": prompt,
+            "run_number": run_number,
+            "model": model,
+            "param_size": param_size,
+            "base_count": base_count,
+            "unique_valid": unique_valid,
+        })
+
+    if not rows:
+        print("No valid RAG rows found for regression scatter plots.")
+        return
+
+    df = pd.DataFrame(rows)
+
+    # jitter only for display
+    rng = np.random.default_rng(42)
+    df["param_jitter"] = df["param_size"] * (1 + rng.uniform(-0.05, 0.05, size=len(df)))
+    def make_plot(
+        df_in: pd.DataFrame,
+        y_col: str,
+        y_title: str,
+        title: str,
+        html_name: str,
+        png_name: str,
+        frac: float = 0.35,
+    ) -> None:
+        plot_df = df_in[df_in[y_col] >= 0].copy()
+        if plot_df.empty:
+            print(f"Skipping {title}: no data.")
+            return
+
+        fig = go.Figure()
+
+        fit_df = plot_df[(plot_df["param_size"] > 0) & (plot_df[y_col] > 0)].copy()
+        if len(fit_df) >= 10:
+            x = fit_df["param_size"].to_numpy(float)
+            y = fit_df[y_col].to_numpy(float)
+
+            x_grid, y_center, y_lo, y_hi = lowess_with_confidence_band(
+                x, y, frac=frac, n_boot=250, ci=95, grid_size=200, seed=42
+            )
+
+            fig.add_trace(go.Scatter(
+                x=np.concatenate([x_grid, x_grid[::-1]]),
+                y=np.concatenate([y_hi, y_lo[::-1]]),
+                fill="toself",
+                fillcolor="rgba(255,0,0,0.15)",
+                line=dict(color="rgba(0,0,0,0)"),
+                hoverinfo="skip",
+                showlegend=False,
+                name="95% CI",
+            ))
+
+            fig.add_trace(go.Scatter(
+                x=x_grid,
+                y=y_center,
+                mode="lines",
+                line=dict(color="red", width=4),
+                hovertemplate="Parameter Size=%{x:.2f}B<br>LOWESS=%{y:.2f}<extra></extra>",
+                name="LOWESS",
+                showlegend=False,
+            ))
+
+        fig.update_layout(
+            xaxis_title="Parameter size (B)",
+            yaxis_title=y_title,
+            title=title,
+            template="plotly_white",
+            paper_bgcolor="white",
+            plot_bgcolor="white",
+        )
+        fig.update_xaxes(showgrid=True, gridcolor="lightgray", zeroline=False, tickfont=dict(size=24))
+        fig.update_yaxes(showgrid=True, gridcolor="lightgray", zeroline=False, tickfont=dict(size=24))
+        fig.update_layout(
+            xaxis_title_font=dict(size=20),
+            yaxis_title_font=dict(size=20),
+        )
+
+        html_path = os.path.join(output_subdir, html_name)
+        write_html(fig, html_path)
+
+        try:
+            fig.write_image(
+                os.path.join(output_subdir, png_name),
+                width=1400,
+                height=900,
+                scale=2,
+            )
+        except Exception as e:
+            print(f"Warning: could not write PNG for {title}: {e}")
+
+        print(f"Created RAG-only LOWESS scatter plot: {html_path}")
+        
+    make_plot(
+        df_in=df,
+        y_col="base_count",
+        y_title="Base Commands Generated",
+        title="RAG Only: Base Commands vs Model Size",
+        html_name="rag_only_lowess_base_commands.html",
+        png_name="rag_only_lowess_base_commands.png",
+        frac=0.35,
+    )
+
+    make_plot(
+        df_in=df,
+        y_col="unique_valid",
+        y_title="Unique Valid Commands Generated",
+        title="RAG Only: Unique Valid Commands vs Model Size",
+        html_name="rag_only_lowess_unique_valid.html",
+        png_name="rag_only_lowess_unique_valid.png",
+        frac=0.35,
+    )
+
 
 def create_norag_vs_rag_success_failure_plots(no_rag_csv_path: str, rag_csv_path: str, output_dir: str, model_to_is_coding: Optional[Dict[str, bool]] = None) -> None:
     """Create grouped stacked bar charts comparing successful vs failed iterations between NO_RAG and RAG experiments.
@@ -5386,10 +5669,12 @@ def main(
 
     print("\nCreating average iteration duration plots...")
     create_average_iteration_duration_plots(csv_path, output_dir, model_to_is_coding=model_to_is_coding)
-
+    print("\nCreating RAG-only LOWESS scatter plots...")
+    create_rag_only_lowess_scatter_plots(csv_path, output_dir)
     print("\nCreating average iteration duration scatter plots with jitter...")
     create_average_iteration_duration_scatter_plots(csv_path, output_dir)
-
+    print("\nCreating Chinese vs non-Chinese LOWESS scatter plots...")
+    create_chinese_vs_nonchinese_lowess_plots(csv_path, output_dir)
     print("\nCreating average iteration duration scatter plots with outliers...")
     create_average_iteration_duration_scatter_plots_with_outliers(csv_path, output_dir)
     create_cumulative_valid_unique_stacked_plots(csv_path, output_dir, model_to_is_coding=model_to_is_coding)
@@ -5410,8 +5695,6 @@ def main(
     print("\nCreating NO_RAG vs RAG base commands comparison plots...")
     create_norag_vs_rag_base_commands_plots(no_rag_csv_path, rag_csv_path, output_dir, model_to_is_coding=model_to_is_coding)
 
-    print("\nCreating shot type comparison plot...")
-    create_shot_type_comparison_plot(rag_csv_path, output_dir, model_to_is_coding=model_to_is_coding)
     print("Creating aggregate results plot...")
     create_aggregate_results(rag_csv_path, no_rag_csv_path, output_dir)
     print("\nCreating heatmap of valid commands across prompts and models...")
@@ -5424,7 +5707,7 @@ def main(
     #create_failure_blanks_plots(rag_csv_path, no_rag_csv_path, output_dir, model_to_is_coding=model_to_is_coding)
 
 if __name__ == "__main__":
-    ROOT_DIR = "/data2/nkhajehn/watcher-mcp-server/"
+    ROOT_DIR = "/data/nkhajehn/watcher-mcp-server/"
     DEFAULT_OUTPUT_DIR = os.path.join(ROOT_DIR, "post_processing", "plots")
     #default_csv = os.path.join(DEFAULT_OUTPUT_DIR, "RAG_KORAD_results.csv")
 

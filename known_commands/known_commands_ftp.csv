@@ -1,0 +1,66 @@
+command,num_of_parameters,parameter_list,parameter_type,description,source,example
+SMNT,1,pathname,str,mount different file data structure without altering login or accounting info,https://datatracker.ietf.org/doc/html/rfc959,SMNT /mnt/otherfs
+ALLO,1,decimal_int,int,reserves storage space on server before transferring,https://datatracker.ietf.org/doc/html/rfc959,ALLO 1048576
+ALLO,2,[decimal_int, decimal_int_2],[int,int],reserves storage space on server before transferring,https://datatracker.ietf.org/doc/html/rfc959,ALLO 1048576
+ABOR,0,None,None,abort a file transfer,https://ss64.com/rawftp.html#ABOR,ABOR
+CWD,1,pathname,str,change working directory,https://ss64.com/rawftp.html#ABOR,CWD /pub
+DELE,1,pathname,str,delete a remote file,https://ss64.com/rawftp.html#ABOR,DELE old.txt
+LIST,1,pathname_optional,str,list remote files,https://ss64.com/rawftp.html#ABOR,LIST /pub
+LIST,0,None,None,remote file,https://ss64.com/rawftp.html#ABOR,LIST
+MDTM,1,date,str,return the modification time of a file,https://ss64.com/rawftp.html#ABOR,MDTM file.txt
+MKD,1,pathname,str,make a remote directory,https://ss64.com/rawftp.html#ABOR,MKD newdir
+NLST,0,None,None,name list of remote directory,https://ss64.com/rawftp.html#ABOR,NLST
+NLST,1,pathname_optional,str,name list of remote directory,https://ss64.com/rawftp.html#ABOR,NLST /pub
+PASS,1,password,str,send password,https://ss64.com/rawftp.html#ABOR,PASS hunter2
+PASV,0,None,None,enter passive mode,https://ss64.com/rawftp.html#ABOR,PASV
+PORT,1,host_port,str,open a data port,https://ss64.com/rawftp.html#ABOR,"PORT 192,0,2,10,195,80"
+PWD,0,None,None,print working directory,https://ss64.com/rawftp.html#ABOR,PWD
+QUIT,0,None,None,terminate the connection,https://ss64.com/rawftp.html#ABOR,QUIT
+RETR,1,pathname,str,retrieve a remote file,https://ss64.com/rawftp.html#ABOR,RETR readme.txt
+RMD,1,pathname,str,remove a remote directory,,RMD olddir
+RNFR,1,pathname,str,rename from,https://ss64.com/rawftp.html#ABOR,RNFR oldname.txt
+RNTO,1,pathname,str,rename to,https://ss64.com/rawftp.html#ABOR,RNTO newname.txt
+SITE,1,string,str,site-specific commands,https://ss64.com/rawftp.html#ABOR,SITE CHMOD 755 script.sh
+SIZE,1,file,str,return the size of a file,https://ss64.com/rawftp.html#ABOR,SIZE big.iso
+STOR,1,pathname,str,store a file on the remote host,https://ss64.com/rawftp.html#ABOR,STOR upload.bin
+TYPE,1,type_code,char,set transfer type,https://ss64.com/rawftp.html#ABOR,TYPE I
+TYPE,2,[type_code, bit_size],[char, int],set transfer type,https://ss64.com/rawftp.html#ABOR, TYPE L 8 
+USER,1,username,str,send username,https://ss64.com/rawftp.html#ABOR,USER demo
+ACCT,1,acc_info,str,send account information,https://ss64.com/rawftp.html#ABOR,ACCT accounting-string
+APPE,1,pathname,str,append to a remote file,https://ss64.com/rawftp.html#ABOR,APPE log.txt
+CDUP,0,None,None,CWD to the parent of the current directory,https://ss64.com/rawftp.html#ABOR,CDUP
+HELP,1,optional_string,str,return help on using the server,https://ss64.com/rawftp.html#ABOR,HELP
+HELP,0,None,None,return help on using the server,https://ss64.com/rawftp.html#ABOR,HELP
+MODE,1,mode_code,char,set transfer mode,https://ss64.com/rawftp.html#ABOR,MODE S
+NOOP,0,None,None,do nothing,https://ss64.com/rawftp.html#ABOR,NOOP
+REIN,0,None,None,reinitialize the connection,https://ss64.com/rawftp.html#ABOR,REIN
+STAT,1,pathname,str,return server status,https://ss64.com/rawftp.html#ABOR,STAT
+STAT,0,None,None,return server status,https://ss64.com/rawftp.html#ABOR,STAT
+STOU,0,None,None,store a file uniquely,https://ss64.com/rawftp.html#ABOR,STOU
+STRU,1,structure_code,char,set file transfer structure,https://ss64.com/rawftp.html#ABOR,STRU F
+SYST,0,None,None,return system type,https://ss64.com/rawftp.html#ABOR,SYST
+AUTH,1,telnet_string,str,Authentication/Security Mechanism,https://datatracker.ietf.org/doc/html/rfc2228,AUTH TLS
+ADAT,1,telnet_string,str,Authentication/Security Data,https://datatracker.ietf.org/doc/html/rfc2228,ADAT base64-token
+PROT,1,code,char,Data Channel Protection Level,https://datatracker.ietf.org/doc/html/rfc2228,PROT P
+PBSZ,1,dec_int,int,Protection Buffer Size,https://datatracker.ietf.org/doc/html/rfc2228,PBSZ 0
+CCC,0,None,None,Clear Command Channel,https://datatracker.ietf.org/doc/html/rfc2228,CCC
+MIC,1,telnet_string,str,Integrity Protected Command,https://datatracker.ietf.org/doc/html/rfc2228,MIC
+CONF,1,telnet_string,str,Confidentiality Protected Command,https://datatracker.ietf.org/doc/html/rfc2228,CONF
+ENC,1,telnet_string,str,Privacy Protected Command,https://datatracker.ietf.org/doc/html/rfc2228,ENC
+EPRT,1,long_string,str,"specification of an extended address for the data connection,https://www.rfc-editor.org/rfc/rfc2428.html#:~:text=Allman%2C%20et.",to%20encode%20the%20network%20address.,EPRT |1|192.0.2.10|50000|
+FEAT,0,None,None,get the feature list implemented by the server,https://datatracker.ietf.org/doc/html/rfc2389#section-3.1,FEAT
+HOST,1,hostname,str,allow server-FTP process to deterine to which of virtual hosts the client wishes to connect,https://www.rfc-editor.org/rfc/rfc7151.html#section-3,HOST example.com
+LANG,0,None,None,language negotiation,https://datatracker.ietf.org/doc/html/rfc2640,LANG
+LANG,1,lang_tag,str,language negotiation,https://datatracker.ietf.org/doc/html/rfc2640,LANG en-US
+LPRT,1,long_host_port,str,allows users to specificy a long address for the transport connection over which data are transferred,https://datatracker.ietf.org/doc/html/rfc1639,"LPRT 6,16,192,0,2,10,2,195,80"
+LPSV,0,None,None,listen on a data port different than the default,https://datatracker.ietf.org/doc/html/rfc1639,LPSV
+XMKD,1,child,str,"Make a directory with the name ""child""",https://datatracker.ietf.org/doc/html/rfc775,XMKD newdir
+XRMD,1,child,str,"Remove the directory with the name ""child""",https://datatracker.ietf.org/doc/html/rfc775,XRMD olddir
+XPWD,0,None,None,Print the current working directory,https://datatracker.ietf.org/doc/html/rfc775,XPWD
+XCUP,0,None,None,Change to the parent of  the  current  working directory,https://datatracker.ietf.org/doc/html/rfc775,XCUP
+XRCP,1,Recipient Name,str,Receive some acknowledgement/refusal for each name,https://datatracker.ietf.org/doc/html/rfc743,XRCP bob
+XRSQ,1,scheme_single_character,char,Test for implementation of XRSQ/XRCP,https://datatracker.ietf.org/doc/html/rfc743,XRSQ
+XSEN,0,None,None,Send to terminal. Returns 453 failure reply if the addressee is refusing or not logged in,https://datatracker.ietf.org/doc/html/rfc737,XSEN
+XSEM,0,None,None,"Send,Mail if can't. Returns 009 notification reply if message cannot be SENT",https://datatracker.ietf.org/doc/html/rfc737,XSEM
+XMAS,0,None,None,Mail And Send,https://datatracker.ietf.org/doc/html/rfc737,XMAS
+MAIL,1,recipient_name,str,Mail to terminal,https://datatracker.ietf.org/doc/html/rfc737,MAIL FROM:<alice@example.com>
