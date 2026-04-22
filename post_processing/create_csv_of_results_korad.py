@@ -5,23 +5,23 @@ import math
 import csv
 import sys
 import ast
+import subprocess
 from pathlib import Path
 from typing import Dict, Iterator, List, Tuple, Any, Set
 from collections import defaultdict
 from datetime import datetime
-from ..llm_pipeline.services.get_commands import extract_commands_from_response
 
 # Add parent directory to path to import get_commands
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from get_commands import extract_commands_from_response
+from llm_pipeline.services.get_commands import extract_commands_from_response
 
 
-ROOT_DIR = "/home/nkhajehn/MCP-Command-Generation/RAG_KORAD/"
-DEFAULT_OUTPUT_DIR = os.path.join("/home/nkhajehn/MCP-Command-Generation", "post_processing", "plots")
+ROOT_DIR = "/data2/nkhajehn/watcher-mcp-server/"
+DEFAULT_OUTPUT_DIR = os.path.join("/data2/nkhajehn/watcher-mcp-server", "post_processing", "plots")
 KNOWN_COMMANDS_CSV = os.path.join("/home/nkhajehn/MCP-Command-Generation", "known_commands.csv")
 
-CHINESE_MODELS_CSV = "/mnt/data/chinese_models.csv"
-NON_CHINESE_MODELS_CSV = "/mnt/data/non_chinese_models.csv"
+CHINESE_MODELS_CSV = "/data2/nkhajehn/watcher-mcp-server/chinese_model_folder/chinese_models.csv"
+NON_CHINESE_MODELS_CSV = "/data2/nkhajehn/watcher-mcp-server/chinese_model_folder/non_chinese_models.csv"
 
 
 def extract_prompt_name(folder_name: str) -> str:
@@ -312,11 +312,48 @@ def normalize_command(cmd: str, base_cmd=False) -> str:
     return cmd.strip().rstrip(",").strip()
 
 
+_ollama_param_cache: Dict[str, float] = {}
+
+
+def get_parameter_count_from_ollama(model_name: str) -> float:
+    """Run `ollama show <model_name>` and return the parameter count in billions."""
+    if model_name in _ollama_param_cache:
+        return _ollama_param_cache[model_name]
+
+    count = 0.0
+    try:
+        result = subprocess.run(
+            ["ollama", "show", model_name],
+            capture_output=True, text=True, timeout=30,
+        )
+        for line in result.stdout.splitlines():
+            m = re.search(r'parameters\s+([\d.]+)\s*([BbMmKkGgTt]?)', line)
+            if m:
+                number = float(m.group(1))
+                suffix = m.group(2).upper()
+                if suffix == "B":
+                    count = number
+                elif suffix == "M":
+                    count = number / 1_000
+                elif suffix == "K":
+                    count = number / 1_000_000
+                elif suffix == "T":
+                    count = number * 1_000
+                else:
+                    count = number / 1e9  # assume raw count
+                break
+    except Exception as e:
+        print(f"Warning: ollama show {model_name} failed: {e}")
+
+    _ollama_param_cache[model_name] = count
+    return count
+
+
 def load_model_parameters(root_dir: str = ROOT_DIR) -> Dict[str, float]:
-    """Load model parameter sizes from models_combined_with_num_predict.csv."""
+    """Load model parameter sizes from models_combined_with_num_predict.csv (used as fallback)."""
     model_params_map = {}
     models_csv_path = os.path.join(root_dir, "models_combined_with_num_predict.csv")
-    models_csv_path = "/home/nkhajehn/MCP-Command-Generation/models_combined_with_num_predict.csv"
+    models_csv_path = "/data2/nkhajehn/watcher-mcp-server/models_combined_with_num_predict.csv"
     try:
         with open(models_csv_path, "r", encoding="utf-8") as f:
             reader = csv.DictReader(f)
@@ -439,7 +476,7 @@ def generate_csv_data(
                 base_commands = set()
                 iteration_duration_seconds = None
 
-            parameter_count = model_params_map.get(model, 0.0)
+            parameter_count = get_parameter_count_from_ollama(model) or model_params_map.get(model, 0.0)
 
             rows.append({
                 "model": model,
@@ -479,7 +516,7 @@ def generate_csv_data(
                 "unique_valid_commands": 0,
                 "number_of_base_commands_in_iteration": 0,
                 "base_commands_seen_so_far": set(),
-                "parameter_count": 0,
+                "parameter_count": get_parameter_count_from_ollama(model) or model_params_map.get(model, 0.0),
                 "iteration_duration_seconds": 0,
                 "cumulative_failures": 50
             })
