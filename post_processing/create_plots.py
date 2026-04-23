@@ -15,6 +15,44 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from statsmodels.nonparametric.smoothers_lowess import lowess
 
+
+def lowess_with_confidence_band(
+    x, y, frac=0.35, n_boot=250, ci=95, grid_size=200, seed=42
+):
+    """LOWESS trend line with bootstrap confidence band.
+
+    Returns (x_grid, y_center, y_lo, y_hi), or (None, None, None, None) when
+    there are fewer than 3 points or fewer than 2 unique x-values.
+    """
+    x = np.asarray(x, dtype=float)
+    y = np.asarray(y, dtype=float)
+
+    if len(x) < 3 or len(np.unique(x)) < 2:
+        return None, None, None, None
+
+    rng = np.random.default_rng(seed)
+    x_grid = np.linspace(x.min(), x.max(), grid_size)
+
+    fit = lowess(y, x, frac=frac, return_sorted=True)
+    y_center = np.interp(x_grid, fit[:, 0], fit[:, 1])
+
+    n = len(x)
+    boots = np.empty((n_boot, grid_size), dtype=float)
+    for b in range(n_boot):
+        idx = rng.integers(0, n, size=n)
+        xb, yb = x[idx], y[idx]
+        if len(np.unique(xb)) < 2:
+            boots[b] = y_center
+            continue
+        fit_b = lowess(yb, xb, frac=frac, return_sorted=True)
+        boots[b] = np.interp(x_grid, fit_b[:, 0], fit_b[:, 1])
+
+    alpha = (100 - ci) / 2
+    y_lo = np.percentile(boots, alpha, axis=0)
+    y_hi = np.percentile(boots, 100 - alpha, axis=0)
+    return x_grid, y_center, y_lo, y_hi
+
+
 def write_html(fig: go.Figure, out_path: str) -> None:
     """Write a Plotly figure to an HTML file.
     
@@ -242,33 +280,6 @@ def create_chinese_vs_nonchinese_lowess_plots(csv_path: str, output_dir: str) ->
     - scatter points colored by group
     - bootstrap confidence bands
     """
-    def lowess_with_confidence_band(
-        x, y, frac=0.35, n_boot=250, ci=95, grid_size=200, seed=42
-    ):
-        rng = np.random.default_rng(seed)
-
-        x = np.asarray(x, dtype=float)
-        y = np.asarray(y, dtype=float)
-
-        x_grid = np.linspace(x.min(), x.max(), grid_size)
-
-        fit = lowess(y, x, frac=frac, return_sorted=True)
-        y_center = np.interp(x_grid, fit[:, 0], fit[:, 1])
-
-        n = len(x)
-        boots = np.empty((n_boot, grid_size), dtype=float)
-
-        for b in range(n_boot):
-            idx = rng.integers(0, n, size=n)
-            xb, yb = x[idx], y[idx]
-            fit_b = lowess(yb, xb, frac=frac, return_sorted=True)
-            boots[b] = np.interp(x_grid, fit_b[:, 0], fit_b[:, 1])
-
-        alpha = (100 - ci) / 2
-        y_lo = np.percentile(boots, alpha, axis=0)
-        y_hi = np.percentile(boots, 100 - alpha, axis=0)
-        return x_grid, y_center, y_lo, y_hi
-
     def parse_base_count(base_set_str: str) -> int:
         s = (base_set_str or "").strip()
         if s in ("", "set()", "{}"):
@@ -288,7 +299,7 @@ def create_chinese_vs_nonchinese_lowess_plots(csv_path: str, output_dir: str) ->
         return len(set(vals))
 
     def add_lowess_group(fig: go.Figure, group_df: pd.DataFrame, group_name: str, color: str, y_col: str):
-        fit_df = group_df[(group_df["param_size"] > 0) & (group_df[y_col] > 0)].copy()
+        fit_df = group_df[group_df["param_size"] > 0].copy()
         if len(fit_df) < 8:
             print(f"Skipping LOWESS for {group_name} on {y_col}: not enough points.")
             return
@@ -299,6 +310,9 @@ def create_chinese_vs_nonchinese_lowess_plots(csv_path: str, output_dir: str) ->
         x_grid, y_center, y_lo, y_hi = lowess_with_confidence_band(
             x, y, frac=0.35, n_boot=250, ci=95, grid_size=200, seed=42
         )
+
+        if x_grid is None:
+            return
 
         fig.add_trace(go.Scatter(
             x=np.concatenate([x_grid, x_grid[::-1]]),
@@ -3756,32 +3770,6 @@ def create_rag_only_lowess_scatter_plots(rag_csv_path: str, output_dir: str) -> 
     Each point is one (prompt, run, model) final result, using iteration 50 if present,
     otherwise the maximum iteration for that (prompt, run, model).
     """
-    def lowess_with_confidence_band(x, y, frac=0.35, n_boot=250, ci=95, grid_size=200, seed=42):
-        rng = np.random.default_rng(seed)
-
-        x = np.asarray(x, dtype=float)
-        y = np.asarray(y, dtype=float)
-
-        x_grid = np.linspace(x.min(), x.max(), grid_size)
-
-        fit = lowess(y, x, frac=frac, return_sorted=True)
-        y_center = np.interp(x_grid, fit[:, 0], fit[:, 1])
-
-        n = len(x)
-        boots = np.empty((n_boot, grid_size), dtype=float)
-
-        for b in range(n_boot):
-            idx = rng.integers(0, n, size=n)
-            xb, yb = x[idx], y[idx]
-            fit_b = lowess(yb, xb, frac=frac, return_sorted=True)
-            boots[b] = np.interp(x_grid, fit_b[:, 0], fit_b[:, 1])
-
-        alpha = (100 - ci) / 2
-        y_lo = np.percentile(boots, alpha, axis=0)
-        y_hi = np.percentile(boots, 100 - alpha, axis=0)
-
-        return x_grid, y_center, y_lo, y_hi
-
     def parse_base_count(base_set_str: str) -> int:
         s = (base_set_str or "").strip()
         if s in ("", "set()", "{}"):
@@ -3815,8 +3803,8 @@ def create_rag_only_lowess_scatter_plots(rag_csv_path: str, output_dir: str) -> 
                 prompt = row.get("prompt", "").strip()
                 model = row.get("model", "").strip()
 
-                if not prompt or not model or prompt == "security-incremental-1":
-                    continue
+                #if not prompt or not model or prompt == "security-incremental-1":
+                #    continue
 
                 try:
                     run_number = int(row.get("run_number", 0))
@@ -3888,7 +3876,7 @@ def create_rag_only_lowess_scatter_plots(rag_csv_path: str, output_dir: str) -> 
 
         fig = go.Figure()
 
-        fit_df = plot_df[(plot_df["param_size"] > 0) & (plot_df[y_col] > 0)].copy()
+        fit_df = plot_df[plot_df["param_size"] > 0].copy()
         if len(fit_df) >= 10:
             x = fit_df["param_size"].to_numpy(float)
             y = fit_df[y_col].to_numpy(float)
@@ -3896,6 +3884,9 @@ def create_rag_only_lowess_scatter_plots(rag_csv_path: str, output_dir: str) -> 
             x_grid, y_center, y_lo, y_hi = lowess_with_confidence_band(
                 x, y, frac=frac, n_boot=250, ci=95, grid_size=200, seed=42
             )
+
+            if x_grid is None:
+                return
 
             fig.add_trace(go.Scatter(
                 x=np.concatenate([x_grid, x_grid[::-1]]),
@@ -3982,42 +3973,6 @@ def create_chinese_vs_nonchinese_lowess_trellis_plots(csv_path: str, output_dir:
     No scatter dots are drawn.
     """
 
-    def lowess_with_confidence_band(
-        x, y, frac=0.35, n_boot=250, ci=95, grid_size=200, seed=42
-    ):
-        rng = np.random.default_rng(seed)
-
-        x = np.asarray(x, dtype=float)
-        y = np.asarray(y, dtype=float)
-
-        if len(x) < 3 or len(np.unique(x)) < 2:
-            return None, None, None, None
-
-        x_grid = np.linspace(x.min(), x.max(), grid_size)
-
-        fit = lowess(y, x, frac=frac, return_sorted=True)
-        y_center = np.interp(x_grid, fit[:, 0], fit[:, 1])
-
-        n = len(x)
-        boots = np.empty((n_boot, grid_size), dtype=float)
-
-        for b in range(n_boot):
-            idx = rng.integers(0, n, size=n)
-            xb, yb = x[idx], y[idx]
-
-            if len(np.unique(xb)) < 2:
-                boots[b] = y_center
-                continue
-
-            fit_b = lowess(yb, xb, frac=frac, return_sorted=True)
-            boots[b] = np.interp(x_grid, fit_b[:, 0], fit_b[:, 1])
-
-        alpha = (100 - ci) / 2
-        y_lo = np.percentile(boots, alpha, axis=0)
-        y_hi = np.percentile(boots, 100 - alpha, axis=0)
-
-        return x_grid, y_center, y_lo, y_hi
-
     def parse_base_count(base_set_str: str) -> int:
         s = (base_set_str or "").strip()
         if s in ("", "set()", "{}"):
@@ -4046,7 +4001,7 @@ def create_chinese_vs_nonchinese_lowess_trellis_plots(csv_path: str, output_dir:
         col: int,
         showlegend: bool,
     ) -> None:
-        fit_df = group_df[(group_df["param_size"] > 0) & (group_df[y_col] > 0)].copy()
+        fit_df = group_df[group_df["param_size"] > 0].copy()
 
         if len(fit_df) < 4 or fit_df["param_size"].nunique() < 2:
             return
@@ -4997,36 +4952,6 @@ def create_heatmap(rag_path: str, no_rag_path:str, output_dir: str) -> None:
 
 def create_regression_scatter_plot(rag_path: str, no_rag_path:str, output_dir: str) -> None:
         # --- Helper: LOWESS + bootstrap confidence band
-    def lowess_with_confidence_band(x, y, frac=0.35, n_boot=250, ci=95, grid_size=200, seed=42):
-        """
-        Bootstrap confidence band for LOWESS.
-        Returns x_grid, y_center, y_lo, y_hi.
-        """
-        rng = np.random.default_rng(seed)
-
-        x = np.asarray(x, float)
-        y = np.asarray(y, float)
-
-        x_grid = np.linspace(x.min(), x.max(), grid_size)
-
-        # center line
-        fit = lowess(y, x, frac=frac, return_sorted=True)
-        y_center = np.interp(x_grid, fit[:, 0], fit[:, 1])
-
-        # bootstrap
-        n = len(x)
-        boots = np.empty((n_boot, grid_size), float)
-        for b in range(n_boot):
-            idx = rng.integers(0, n, size=n)
-            xb, yb = x[idx], y[idx]
-            fit_b = lowess(yb, xb, frac=frac, return_sorted=True)
-            boots[b] = np.interp(x_grid, fit_b[:, 0], fit_b[:, 1])
-
-        alpha = (100 - ci) / 2
-        y_lo = np.percentile(boots, alpha, axis=0)
-        y_hi = np.percentile(boots, 100 - alpha, axis=0)
-
-        return x_grid, y_center, y_lo, y_hi
     output_subdir = os.path.join(output_dir, "regression_line_graph")
     os.makedirs(output_subdir, exist_ok=True)
     

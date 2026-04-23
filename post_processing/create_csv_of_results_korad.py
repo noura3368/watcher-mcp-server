@@ -16,8 +16,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from llm_pipeline.services.get_commands import extract_commands_from_response
 
 
-ROOT_DIR = "/data2/nkhajehn/watcher-mcp-server/"
-DEFAULT_OUTPUT_DIR = os.path.join("/data2/nkhajehn/watcher-mcp-server", "post_processing", "plots")
+ROOT_DIR = "/data2/nkhajehn/MCP-Command-Generation/NO_RAG_KORAD"
+DEFAULT_OUTPUT_DIR = os.path.join("/data2/nkhajehn/MCP-Command-Generation", "post_processing", "plots")
 KNOWN_COMMANDS_CSV = os.path.join("/home/nkhajehn/MCP-Command-Generation", "known_commands.csv")
 
 CHINESE_MODELS_CSV = "/data2/nkhajehn/watcher-mcp-server/chinese_model_folder/chinese_models.csv"
@@ -349,6 +349,18 @@ def get_parameter_count_from_ollama(model_name: str) -> float:
     return count
 
 
+def get_parameter_count_from_model_name(model_name: str) -> float:
+    """Extract parameter count in billions from the model name string.
+
+    Handles patterns like 'llama3.2:3b', 'mistral:7b', 'phi3:14b', 'deepseek-coder:6.7b'.
+    Returns 0.0 if no size pattern is found.
+    """
+    m = re.search(r'(\d+(?:\.\d+)?)\s*[bB]\b', model_name)
+    if m:
+        return float(m.group(1))
+    return 0.0
+
+
 def load_model_parameters(root_dir: str = ROOT_DIR) -> Dict[str, float]:
     """Load model parameter sizes from models_combined_with_num_predict.csv (used as fallback)."""
     model_params_map = {}
@@ -476,7 +488,7 @@ def generate_csv_data(
                 base_commands = set()
                 iteration_duration_seconds = None
 
-            parameter_count = get_parameter_count_from_ollama(model) or model_params_map.get(model, 0.0)
+            parameter_count = get_parameter_count_from_model_name(model) or get_parameter_count_from_ollama(model)
 
             rows.append({
                 "model": model,
@@ -516,7 +528,7 @@ def generate_csv_data(
                 "unique_valid_commands": 0,
                 "number_of_base_commands_in_iteration": 0,
                 "base_commands_seen_so_far": set(),
-                "parameter_count": get_parameter_count_from_ollama(model) or model_params_map.get(model, 0.0),
+                "parameter_count": get_parameter_count_from_model_name(model) or get_parameter_count_from_ollama(model),
                 "iteration_duration_seconds": 0,
                 "cumulative_failures": 50
             })
@@ -573,7 +585,7 @@ def main(output_dir: str = DEFAULT_OUTPUT_DIR) -> None:
         )
         all_csv_rows.extend(rows)
 
-    csv_path = os.path.join(output_dir, "RAG_KORAD_onlyrun1_results.csv")
+    csv_path = os.path.join(output_dir, "NO_RAG_korad.csv")
 
     os.makedirs(output_dir, exist_ok=True)
 
