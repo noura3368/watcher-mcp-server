@@ -13,8 +13,10 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 from structured_output import generate_with_timing
 from rag_service import retrieve_context
+from lc_service import load_lc_content
 
 RAG_ENABLED = os.getenv("RAG_ENABLED", "1").lower() not in ("0", "false", "no")
+LC_ENABLED = os.getenv("LC_ENABLED", "0").lower() not in ("0", "false", "no")
 
 def info(message):
     """Print info message with timestamp"""
@@ -235,12 +237,17 @@ def main():
     if not models:
         info("No models loaded from CSV file. Exiting.")
         sys.exit(1)
-    rag_resp = ""
+    context = ""
     if RAG_ENABLED:
         try:
-            rag_resp = asyncio.run(retrieve_context(config["target"], config["interface"]))
+            context = asyncio.run(retrieve_context(config["target"], config["interface"]))
         except Exception as e:
             print(f"[RAG] Failed to retrieve context: {e}", file=sys.stderr)
+    elif LC_ENABLED:
+        try:
+            context = load_lc_content(config["LC_file"])
+        except Exception as e:
+            print(f"[LC] Failed to load LC file: {e}", file=sys.stderr)
     # Get available templates
     available_templates = get_available_templates(config["templates_dir"])
     if not available_templates:
@@ -307,7 +314,7 @@ def main():
                         "INTERFACE": config["interface"],
                         "FOUNDSOFAR": foundsofar_str,
                         "ITERATION": i,
-                        "RAG": rag_resp
+                        "RAG": context
                     }
                     
                     # Run template and generate in-process

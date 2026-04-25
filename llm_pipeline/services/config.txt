@@ -35,3 +35,6 @@ interface=serial AT-command interface
 timeout=600
 
 model_row=0
+
+# Path to a PDF file to use as long-context (LC) input when LC_ENABLED=1
+LC_file=/path/to/document.pdf

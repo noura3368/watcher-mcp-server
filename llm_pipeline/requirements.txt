@@ -3,6 +3,7 @@ fastapi
 uvicorn
 httpx
 haiku.rag
-outlines 
+outlines
 ollama
 Jinja2
+pymupdf4llm
