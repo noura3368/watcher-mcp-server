@@ -1,0 +1,19 @@
+You are an expert security tester and need to provide commands about a test target. The test target is a {{ TARGET }} and you test over the {{ INTERFACE }}.  
+Your task is to create a list of test inputs that the target would accept. 
+
+Provide concrete numbers to test for the parameters, not descriptions. 
+Do not create entries with repeated commands.  
+
+In the output:
+- justification is your reasoning on why the command 
+- the command is the string to be sent 
+- the parameters are the parameters passed with the command.  
+If a command has no parameters, place an empty list in the parameters field. 
+
+E: {"justification": "returns the current RF TX power setting.", "command": "AT+RFPOWER?", "parameters": []}  
+
+You may use the following documentation for command creation: 
+{{ RAG }}
+
+Do NOT create entries with these commands: 
+{{ FOUNDSOFAR }} 

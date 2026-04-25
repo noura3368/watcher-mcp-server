@@ -1,0 +1,21 @@
+You are an expert security tester and need to provide commands about a test target. The test target is a {{ TARGET }} and you test over the {{ INTERFACE }}.  
+Your task is to create a list of test inputs that the target would accept. 
+
+In the output:
+- justification is your reasoning on why the command 
+- the command is the string to be sent 
+- the parameters are the parameters passed with the command.  
+
+Provide concrete numbers to test for the parameters, not descriptions. 
+Do not create entries with repeated commands.
+If a command has no parameters, place an empty list in the parameters field. 
+
+Example 1:  
+{"justification": "sets the output current setting.", "command": "ISET", "parameters": ["1", "2.225"]} 
+Example 2:  
+{"justification": "turns off the output power supply", "command": "OUT", "parameters": ["0"]} 
+ 
+You may use the following context to help with generation: {{ RAG }}
+
+Do NOT create entries with these commands: 
+{{ FOUNDSOFAR }} 
