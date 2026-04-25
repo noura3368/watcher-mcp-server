@@ -1,3 +1,4 @@
+from collections import defaultdict
 from itertools import permutations
 from typing import Dict, Set, Tuple
 import csv
@@ -6,7 +7,7 @@ import re
 from scipy.stats import wilcoxon
 
 zero_shot_prompts = ["prompt5", "prompt7", "prompt9", "prompt8"]
-one_shot_prompts = ["prompt1", "prompt2", "prompt3", "prompt4", "prompt10"]
+one_shot_prompts = ["prompt1", "prompt2", "prompt3", "prompt10", "prompt4"]
 two_shot_prompts = ["prompt6", "prompt11"]
 
 
@@ -64,32 +65,36 @@ base_data = load_base_commands_data(
 
 all_prompts = zero_shot_prompts + one_shot_prompts + two_shot_prompts
 
-# keyed by (model, run_number) so we can match across prompts
-prompt_counts: Dict[str, Dict[Tuple[str, int], int]] = {p: {} for p in all_prompts}
+_sums: Dict[str, Dict[str, float]] = {p: defaultdict(float) for p in all_prompts}
+_run_counts: Dict[str, Dict[str, int]] = {p: defaultdict(int) for p in all_prompts}
 
 for (prompt, run_number, model, *_), count in base_data.items():
-    if prompt in prompt_counts:
-        prompt_counts[prompt][(model, run_number)] = count
+    if prompt in _sums:
+        _sums[prompt][model] += count
+        _run_counts[prompt][model] += 1
+
+# one averaged value per model per prompt
+prompt_counts: Dict[str, Dict[str, float]] = {
+    p: {model: round(_sums[p][model] / _run_counts[p][model], 2) for model in _sums[p]}
+    for p in all_prompts
+}
 
 
 def compare_all_prompts():
     for pa, pb in permutations(all_prompts, 2):
-        keys_a = set(prompt_counts[pa])
-        keys_b = set(prompt_counts[pb])
-
-        models_a = {m for m, _ in keys_a}
-        models_b = {m for m, _ in keys_b}
+        models_a = set(prompt_counts[pa])
+        models_b = set(prompt_counts[pb])
         only_a = models_a - models_b
         only_b = models_b - models_a
 
-        if only_a:
-            print(f"  Omitting models only in {pa}: {only_a}")
-        if only_b:
-            print(f"  Omitting models only in {pb}: {only_b}")
+        #if only_a:
+        #    print(f"  Omitting models only in {pa}: {only_a}")
+        #if only_b:
+        #    print(f"  Omitting models only in {pb}: {only_b}")
 
-        common = sorted(keys_a & keys_b)
-        counts_a = [prompt_counts[pa][k] for k in common]
-        counts_b = [prompt_counts[pb][k] for k in common]
+        common = sorted(models_a & models_b)
+        counts_a = [prompt_counts[pa][m] for m in common]
+        counts_b = [prompt_counts[pb][m] for m in common]
 
         stat, p = wilcoxon(counts_a, counts_b, alternative='greater')
         print(f"Wilcoxon test between {pa} and {pb}: stat={stat}, p-value={p}")
