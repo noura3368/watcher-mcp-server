@@ -1,40 +1,83 @@
-# Configuration file for run-structured.py
+# Configuration file for run.py (python run.py --config config.txt)
 # Lines starting with # are comments and will be ignored
 # Format: key=value (no spaces around the = sign)
 # Values can be quoted with single or double quotes if they contain spaces
 
 # CSV file containing model names
-models_csv=/data/nkhajehn/watcher-mcp-server/llm_pipeline/services/models_combined_with_num_predict.csv
+models_csv=/home/nkhajehn/watcher-mcp-server/llm_pipeline/services/models_combined_with_num_predict.csv
 
 # Directory containing Jinja templates
-templates_dir=/data/nkhajehn/watcher-mcp-server/llm_pipeline/templates/ftp_prompts
+templates_dir=/home/nkhajehn/watcher-mcp-server/llm_pipeline/templates
+
 
 # Specific templates to use (comma-separated, or leave empty/use "all" for all templates)
 # Examples:
 # template=security1.jinja,security-incremental-1.jinja
 # template=all
 # template=
-template=prompt6.jinja,prompt4.jinja,prompt7.jinja
+template=all
 
 
 # Starting iteration number
 start_iteration=1
 
-# Number of iterations to run
-num_iterations=1
+# Number of iterations to run (a count: iterations start_iteration .. start_iteration+num_iterations-1)
+num_iterations=3
 
 # Number of trials per model
-trials_per_model=10
+trials_per_model=20
 
 # Target device name
-target=File Transfer Protocol
+target=KORAD KA3005P Power Supply
 
 # Interface type
-interface=serial AT-command interface
+interface=RS232 interface
 
+# Seconds to wait for one generation before it is recorded as failed
 timeout=600
 
-model_row=0
+# Runaway detector, checked while the answer streams in.
+#   off     = no checking
+#   shadow  = only record where it would have stopped (runaway_flag in each result's stats)
+#   enforce = stop the trial and save it as a failure with failure_reason runaway:<pattern>
+runaway_detection=shadow
+# Stop after this many whitespace-only pieces in a row
+runaway_max_whitespace=300
+# Stop after the same command with the same parameters appears this many times in a row
+runaway_max_repeats=10
 
-# Path to a PDF file to use as long-context (LC) input when LC_ENABLED=1
+# First and last CSV data rows to use (1-based; model_row 0 = from the top, model_end_row 0 = to the end)
+model_row=0
+model_end_row=0
+
+# Path to a PDF file to use as long-context (LC) input when mode=lc
 LC_file=/path/to/document.pdf
+
+# System under test; used in the output path. Derived from templates_dir when empty
+# (templates -> korad, ftp_prompts -> ftp, wifi_prompts -> wifi).
+system=korad
+
+# rag = retrieved documentation, norag = no context, lc = whole LC_file PDF as context.
+# Can be overridden with --mode. When empty, the old RAG_ENABLED/LC_ENABLED env vars decide.
+mode=norag
+
+# Outputs go to <output_root>/<system>/<mode>/<template>-run<N>/ (relative paths are from the working directory)
+output_root=results
+
+# (iteration, template) chains to run at once against the same loaded model.
+# Set OLLAMA_NUM_PARALLEL on the Ollama server to at least this value.
+parallel_chains=1
+
+# Pull models that are missing (the next model is downloaded while the current one runs)
+pull_models=true
+
+# Delete a model after its runs finish, but only if this run pulled it
+remove_after=false
+
+# ColQwen page index built by the watcher (empty = <repo>/data/colqwen.lancedb or $COLRAG_DB)
+rag_db=
+# Number of PDF pages whose text goes into the prompt
+rag_top_k=5
+# Retrieval query; may use {target} and {interface}.
+# Empty = "Commands, syntax and parameters for {target}"
+rag_query=

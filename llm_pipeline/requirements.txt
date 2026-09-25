@@ -2,8 +2,15 @@ requests
 fastapi
 uvicorn
 httpx
-haiku.rag
-outlines
+pydantic>=2
 ollama
 Jinja2
 pymupdf4llm
+# rag mode (ColQwen page retrieval, see colrag/store.py)
+torch
+colpali-engine
+lancedb
+pyarrow
+numpy
+pillow
+pymupdf

@@ -2,12 +2,11 @@ failed_outputs*
 prompt*
 results*
 *.pyc
-data/haiku.mxbai.rag.lancedb/*i
+
 raw_docs/*
 !raw_docs/.gitkeep
 data/*
 !data/.gitkeep
 docs_processed/*
 !docs_processed/.gitkeep
-docling_models/*
 data/watcher_state.json

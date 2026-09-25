@@ -1,27 +1,25 @@
-import os
+import sys
 from pathlib import Path
+from typing import List, Optional, Tuple
 
-# 1. SET ENV VARS FIRST - Before any haiku imports
-os.environ["HAIKU_EMBEDDING_MODEL"] = "mxbai-embed-large:latest"
-os.environ["HAIKU_EMBEDDING_VECTOR_DIM"] = "1024"
-# Ensure the key is exactly what the library expects (check if it's HAIKU_RAG_CONFIG)
-os.environ["HAIKU_RAG_CONFIG"] = "/data/nkhajehn/watcher-mcp-server/haiku.rag.yaml"
+REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO_ROOT))
 
-# 2. NOW IMPORT
-from haiku.rag.client import HaikuRAG
+DEFAULT_QUERY = "Commands, syntax and parameters for {target}"
 
-DB_PATH = Path(os.getenv("DB", "/data/nkhajehn/watcher-mcp-server/data/haiku_mxbai.rag.lancedb"))
 
-async def retrieve_context(target: str, interface: str, top_k: int = 5):
-    query = f"You are a fuzzing engine. Your target is {target}. Retrieve information..."
-    chunks = []
-    
-    # 3. PASS THE CONFIG EXPLICITLY
-    # If the class allows a config_path, pass it here to override defaults.
-    async with HaikuRAG(db_path=DB_PATH, read_only=True) as client:
-        results = await client.search(query) # Use the actual query, not "test"
-        
-        for r in results[:top_k]:
-            text = getattr(r, "text", None) or getattr(r, "content", None) or str(r)
-            chunks.append(text)
-    return "\n\n".join(chunks)
+def retrieve_context(target: str, interface: str, top_k: int = 5, db_path: Optional[str] = None,
+                     query: str = "") -> Tuple[str, List[dict]]:
+    """Retrieve the top_k pages for the query from the ColQwen index.
+
+    `query` may use {target} and {interface}. Returns (context text, page hits);
+    the text is each page's markdown under a `[file p.N]` header.
+    """
+    from colrag.store import search  # imported lazily so no-RAG runs don't need torch
+
+    query = (query or DEFAULT_QUERY).format(target=target, interface=interface)
+    hits = search(query, k=top_k, db_path=Path(db_path) if db_path else None)
+    text = "\n\n".join(f"[{Path(h['source_file']).name} p.{h['page_num']}]\n{h['text']}" for h in hits)
+    for h in hits:
+        h["query"] = query
+    return text, hits

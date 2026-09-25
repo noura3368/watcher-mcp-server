@@ -1,5 +1,9 @@
 watchdog
-requests
-haiku.rag
-pypdf
-ollama
+torch
+colpali-engine
+lancedb
+pyarrow
+numpy
+pillow
+pymupdf
+pymupdf4llm
