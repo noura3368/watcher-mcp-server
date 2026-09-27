@@ -183,13 +183,11 @@ def make_env(config: dict) -> Environment:
 
 
 def build_params(config: dict, context: str, foundsofar: str, trial: int) -> dict:
-    # Korad templates use {{ CONTEXT }}, FTP/WiFi templates use {{ RAG }}; both get the same text.
     return {
         "TARGET": config["target"],
         "INTERFACE": config["interface"],
         "FOUNDSOFAR": foundsofar,
         "ITERATION": trial,
-        "RAG": context,
         "CONTEXT": context,
     }
 

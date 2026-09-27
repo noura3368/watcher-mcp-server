@@ -11,7 +11,9 @@ If a command has no parameters, place an empty list in the parameters field.
 
 Example: {"justification": "To copy one file from the remote machine to the local machine", "command": "GET", "parameters": ["FILE"]} 
  
-You may use the following context to help with generation: {{ RAG }}
+{% if CONTEXT %}
+You may use the following context to help with generation: {{ CONTEXT }}
+{% endif %}
 
 Do NOT create entries with these commands: 
 {{ FOUNDSOFAR }} 

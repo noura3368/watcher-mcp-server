@@ -28,10 +28,12 @@ Return the following in the output: justification, command, parameters (if appli
 
 </CONSTRAINTS>
 
+{% if CONTEXT %}
 <DOCUMENTATION_CONTEXT>
 
 {{ CONTEXT }}
 
 </DOCUMENTATION_CONTEXT>
+{% endif %}
 
 </PROMPT>

@@ -16,6 +16,8 @@ Make sure the commands and parameters returned in each iteration are mutually co
 
 E: {"justification": "returns the current RF TX power setting.", "command": "AT+RFPOWER?", "parameters": []}
  
+{% if CONTEXT %}
 You may use the following documentation for command creation: 
-{{ RAG }}
+{{ CONTEXT }}
+{% endif %}
  
