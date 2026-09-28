@@ -4,8 +4,8 @@
 
 <CONTEXT>
 
-You are tasked with fuzz testing the {{ TARGET }} target over the {{ INTERFACE }}. You will be provided with a piece of context extracted from the target's documentation. 
-Your task is to analyze the text along with your internal knowledge and generate a list of valid commands that the target would accept for fuzzing.
+You are tasked with fuzz testing the {{ TARGET }} target over the {{ INTERFACE }}. 
+Your task is to generate a list of valid commands that the target would accept for fuzzing.
 
 
 </CONTEXT>
@@ -14,7 +14,6 @@ Your task is to analyze the text along with your internal knowledge and generate
 *Provide a Justification for Each Command:* For each command you generate, include a brief justification explaining why you believe this command is valid for the target. 
 *Identify Unique Commands:* Ensure that the commands you generate are unique and not duplicates of each other. Commands should be strings.
 *Include Parameters if Applicable:* If there are specific parameters that should be passed with the command, include them in a structured format. However, do not invent parameters that are not valid. 
-*Mutual Inclusive*: For each iteration, make sure the commands and parameters are compatible to be sent one after another. 
 </INSTRUCTIONS>
 
 <CONSTRAINTS>
@@ -27,7 +26,7 @@ Return the following in the output: justification, command, parameters (if appli
 
 - If a command has no parameters, place an empty list in the parameters field. 
 
-- Make sure the commands and parameters returned in each iteration are mutually compatible. All commands in a single iteration should be executable one after another in the same session.
+- Do NOT create entries with these commands: {{ FOUNDSOFAR }}
 
 </CONSTRAINTS>
 

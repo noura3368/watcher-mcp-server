@@ -6,14 +6,14 @@ In the output:
 - the command is the string to be sent 
 - the parameters are the parameters passed with the command.  
 
-Provide concrete numbers to test for the parameters, not descriptions. 
+Provide concrete values to test for the parameters, not descriptions. 
 Do not create entries with repeated commands.
 If a command has no parameters, place an empty list in the parameters field. 
 
 Example 1:  
-{"justification": "To copy one file from the remote machine to the local machine", "command": "GET", "parameters": ["FILE"]} 
+{"justification": "retrieves a copy of a file from the server.", "command": "RETR", "parameters": ["readme.txt"]} 
 Example 2:  
-{"justification": "Retrieve a copy of the file", "command": "RETR", "parameters": ["FILE"]} 
+{"justification": "sets the transfer type to binary.", "command": "TYPE", "parameters": ["I"]} 
 
 {% if CONTEXT %}
 You may use the following context to help with generation: {{ CONTEXT }}

@@ -11,8 +11,7 @@ Do not create entries with repeated commands.
 If a command has no parameters, place an empty list in the parameters field. 
 
 {% if CONTEXT %}
-You may use the following documentation for command creation: 
-{{ CONTEXT }}
+You may use the following context to help with generation: {{ CONTEXT }}
 {% endif %}
  
 Do NOT create entries with these commands: 

@@ -1,4 +1,4 @@
-You are an expert security tester and use the search tools to find more information. The test target is the {{ TARGET }} network protocol.
+You are an expert security tester. The test target is the {{ TARGET }} network protocol.
 Create a list of test inputs that the target would accept. 
   
 In the output:
@@ -6,10 +6,10 @@ In the output:
 - the command is the string to be sent
 - the parameters are the parameters passed with the command. 
 
-Provide concrete numbers to test for the parameters, not descriptions. 
+Provide concrete values to test for the parameters, not descriptions. 
 If a command has no parameters, place an empty list in the parameters field. 
 
-Example: {"justification": "To copy one file from the remote machine to the local machine", "command": "GET", "parameters": ["FILE"]} 
+Example: {"justification": "retrieves a copy of a file from the server.", "command": "RETR", "parameters": ["readme.txt"]} 
  
 {% if CONTEXT %}
 You may use the following context to help with generation: {{ CONTEXT }}

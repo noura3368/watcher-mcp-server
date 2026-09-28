@@ -4,7 +4,7 @@
 
 <CONTEXT>
 
-You will be provided with a piece of context extracted from the target's documentation. Your task is to analyze the text along with your internal knowledge and generate a list of valid commands that the target would accept for fuzzing.
+Your task is to generate a list of valid commands that the target would accept for fuzzing.
 
 </CONTEXT>
 
@@ -20,9 +20,11 @@ Return the following in the output: justification, command, parameters (if appli
 
 - Create unique commands.
 
-- Provide concrete numbers to test for the parameters, not descriptions. 
+- Provide concrete values to test for the parameters, not descriptions. 
 
 - If a command has no parameters, place an empty list in the parameters field. 
+
+- Do NOT create entries with these commands: {{ FOUNDSOFAR }}
 
 </CONSTRAINTS>
 
