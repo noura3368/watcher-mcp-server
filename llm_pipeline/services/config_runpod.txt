@@ -16,7 +16,9 @@ templates_dir=/workspace/watcher-mcp-server/llm_pipeline/templates
 # template=security1.jinja,security-incremental-1.jinja
 # template=all
 # template=
-template=all
+# norag skips prompt8: it never names the target, so without RAG context it only produces generic commands.
+# rag configs use template=all.
+template=prompt1.jinja,prompt2.jinja,prompt3.jinja,prompt4.jinja,prompt5.jinja,prompt6.jinja,prompt7.jinja,prompt9.jinja,prompt10.jinja,prompt11.jinja
 
 
 # Starting iteration number
