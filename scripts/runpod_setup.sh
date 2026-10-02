@@ -5,7 +5,7 @@ set -euo pipefail
 cd /workspace
 
 # 1. Ollama, stored on the volume so models survive a pod restart
-apt-get update -qq && apt-get install -y -qq tmux zstd curl git >/dev/null
+apt-get update -qq && apt-get install -y -qq tmux zstd curl git rsync >/dev/null
 curl -fsSL https://ollama.com/install.sh | OLLAMA_VERSION="${OLLAMA_VERSION:-}" sh
 export OLLAMA_MODELS=/workspace/ollama-models OLLAMA_NUM_PARALLEL=4 OLLAMA_MAX_LOADED_MODELS=2
 mkdir -p "$OLLAMA_MODELS"
