@@ -48,7 +48,7 @@ runaway_max_whitespace=300
 runaway_max_repeats=10
 
 # First and last CSV data rows to use (1-based; model_row 0 = from the top, model_end_row 0 = to the end)
-model_row=7
+model_row=1
 model_end_row=0
 
 # Path to a PDF file to use as long-context (LC) input when mode=lc
