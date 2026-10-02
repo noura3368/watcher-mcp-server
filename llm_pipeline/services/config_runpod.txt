@@ -41,7 +41,7 @@ timeout=600
 #   off     = no checking
 #   shadow  = only record where it would have stopped (runaway_flag in each result's stats)
 #   enforce = stop the trial and save it as a failure with failure_reason runaway:<pattern>
-runaway_detection=shadow
+runaway_detection=enforce
 # Stop after this many whitespace-only pieces in a row
 runaway_max_whitespace=300
 # Stop after the same command with the same parameters appears this many times in a row
