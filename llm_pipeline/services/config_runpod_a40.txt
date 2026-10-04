@@ -24,6 +24,10 @@ templates_dir=/workspace/watcher-mcp-server/llm_pipeline/templates
 min_params_b=9.5
 # Moved to a separate A5000 run (times out on most trials; 2 chains fit in 24 GB). Applied after --shard.
 exclude_models=mistral-small:24b
+# Stop a model after 10 trials if more than half timed out; it is listed in <output>/korad/norag/deferred_models.txt
+# and skipped on later runs, to be finished elsewhere with only_models=<name>.
+defer_after_trials=10
+defer_timeout_share=0.5
 
 template=prompt1.jinja,prompt2.jinja,prompt3.jinja,prompt4.jinja,prompt5.jinja,prompt6.jinja,prompt7.jinja,prompt9.jinja,prompt10.jinja,prompt11.jinja
 

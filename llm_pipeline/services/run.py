@@ -69,11 +69,13 @@ DEFAULTS = {
     "runaway_detection": "shadow",  # off / shadow (only record) / enforce (stop the trial)
     "runaway_max_whitespace": 300,  # whitespace-only pieces in a row
     "runaway_max_repeats": 10,      # identical command+parameters entries in a row
+    "defer_after_trials": 0,        # after this many trials of a model in a run (0 = off) ...
+    "defer_timeout_share": 0.5,     # ... stop it if more than this share timed out; listed in deferred_models.txt
 }
 INT_KEYS = {"start_iteration", "num_iterations", "trials_per_model", "model_row",
             "model_end_row", "parallel_chains", "rag_top_k", "runaway_max_whitespace",
-            "runaway_max_repeats"}
-FLOAT_KEYS = {"timeout", "min_params_b", "max_params_b"}
+            "runaway_max_repeats", "defer_after_trials"}
+FLOAT_KEYS = {"timeout", "min_params_b", "max_params_b", "defer_timeout_share"}
 BOOL_KEYS = {"pull_models", "remove_after"}
 REQUIRED = ("models_csv", "templates_dir", "target")
 SYSTEM_BY_DIR = {"templates": "korad", "ftp_prompts": "ftp", "wifi_prompts": "wifi"}
@@ -262,12 +264,32 @@ class Runner:
         self.context_length = None
         self.vram_share = None  # fraction of the loaded model held in GPU memory (1.0 = no CPU spill)
         self.gpu = detect_gpu()
+        self._lock = threading.Lock()
+        self.start_model()
+
+    def start_model(self) -> None:
+        """Reset the per-model counters used to defer models that mostly time out."""
+        self.model_done = self.model_timeouts = 0
+        self.model_stop = threading.Event()
+        self.deferred_reason = None
+
+    def _count_trial(self, model: str, timed_out: bool) -> None:
+        cfg = self.config
+        with self._lock:
+            self.model_done += 1
+            self.model_timeouts += timed_out
+            n, t = self.model_done, self.model_timeouts
+            if (cfg["defer_after_trials"] and n >= cfg["defer_after_trials"] and t / n > cfg["defer_timeout_share"]
+                    and not self.model_stop.is_set()):
+                self.deferred_reason = f"{t} of {n} trials timed out"
+                self.model_stop.set()
+                log.warning("%s: %s; deferring it (chains stop after their current trial)", model, self.deferred_reason)
 
     def run_chain(self, model: str, chain: Chain) -> None:
         cfg = self.config
         template = self.env.get_template(chain.template)
         for trial in range(chain.done + 1, cfg["trials_per_model"] + 1):
-            if self.stop.is_set():
+            if self.stop.is_set() or self.model_stop.is_set():
                 return
             log.info("%s | %s | iteration %d | trial %d/%d", model, chain.template, chain.iteration,
                      trial, cfg["trials_per_model"])
@@ -321,6 +343,7 @@ class Runner:
                             model, chain.template, chain.iteration, trial, result.stats["runaway_flag"]["reason"])
             write_json(chain.out_dir / f"{chain.template}_{safe_name(model)}_{stamp}.json", record)
             chain.found.update(extract_commands_from_response(commands, False))
+            self._count_trial(model, False)
 
     def _fail(self, chain, model, stamp, record, error, exc: Optional[GenerationError]) -> None:
         record.update({
@@ -334,6 +357,7 @@ class Runner:
             "ended_at": exc.ended_at.isoformat() if exc and exc.ended_at else None,
             "stats": getattr(exc, "stats", {}),
         })
+        self._count_trial(model, record["failure_reason"] == "timeout")
         path = chain.fail_dir / f"failed_{safe_name(model)}_{stamp}.json"
         write_json(path, record)
         log.warning("%s | %s | iteration %d | trial %s failed: %s (saved %s)", model, chain.template,
@@ -456,9 +480,18 @@ def main() -> None:
         if config["pull_models"] and name not in pulls:
             pulls[name] = pull_pool.submit(lambda: (not is_present(client, name), ensure_model(client, name)))
 
+    # Models deferred by an earlier run (mostly timeouts) are left for a separate run with only_models.
+    deferred_file = root / "deferred_models.txt"
+    deferred = set()
+    if deferred_file.exists() and not config["only_models"]:
+        deferred = {line.split("\t")[0] for line in deferred_file.read_text(encoding="utf-8").splitlines() if line.strip()}
+
     # Work out what is left to do before loading anything, so finished models are never pulled or loaded.
     work = []
     for spec in models:
+        if spec.name in deferred:
+            log.info("%s was deferred earlier (see %s), skipping", spec.name, deferred_file.name)
+            continue
         chains = []
         for j in iterations:
             for t in templates:
@@ -491,6 +524,7 @@ def main() -> None:
                 if config["remove_after"] and pulled_now:
                     remove_model(client, model)
                 continue
+            runner.start_model()
             ex = ThreadPoolExecutor(max_workers=max(1, config["parallel_chains"]))
             try:
                 for fut in [ex.submit(runner.run_chain, model, c) for c in chains]:
@@ -501,6 +535,10 @@ def main() -> None:
             finally:
                 ex.shutdown(wait=True, cancel_futures=True)
 
+            if runner.model_stop.is_set() and not stop.is_set():
+                with open(deferred_file, "a", encoding="utf-8") as f:
+                    f.write(f"{model}\t{runner.deferred_reason}\t{datetime.datetime.now().isoformat(timespec='seconds')}\n")
+                log.warning("Deferred %s (%s); listed in %s", model, runner.deferred_reason, deferred_file)
             if config["remove_after"] and pulled_now:
                 remove_model(client, model)
     except KeyboardInterrupt:
