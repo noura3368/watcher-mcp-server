@@ -68,7 +68,7 @@ while read -r name ip port _; do
   # Pods are short-lived, so host keys go to a separate known_hosts instead of ~/.ssh/known_hosts.
   ssh_cmd="ssh -p $port -i $HOME/.ssh/id_ed25519 -o ConnectTimeout=20 -o BatchMode=yes \
 -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$CONF_DIR/known_hosts"
-  if rsync -az --timeout=300 -e "$ssh_cmd" "root@$ip:/workspace/results/" "$DEST/$name/" >>"$LOG" 2>&1; then
+  if rsync -az --timeout=300 -e "$ssh_cmd" "root@$ip:/workspace/results/" "$DEST/$name/" </dev/null >>"$LOG" 2>&1; then
     log "$name: ok ($(find "$DEST/$name" -name '*.json' | wc -l | tr -d ' ') json files)"
   else
     log "$name: FAILED ($ip:$port), is the pod running and the IP/port current?"; status=1
