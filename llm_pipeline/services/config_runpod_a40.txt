@@ -18,9 +18,10 @@ templates_dir=/workspace/watcher-mcp-server/llm_pipeline/templates
 # template=
 # norag skips prompt8: it never names the target, so without RAG context it only produces generic commands.
 # rag configs use template=all.
-# RTX 4090 (24 GB) pods: Korad norag, models of 14B or less, rows 9 onward (rows 1-8 ran in the A40 test).
-# Launch one pod per shard: run.py --config config_runpod_4090.txt --mode norag --shard K/4
-max_params_b=14
+# A40 (48 GB) pods: Korad norag, models above 9.4B, rows 9 onward (rows 1-8 ran in the A40 test).
+# Models of 9.4B or less run on the TITAN Xp machine (config_titan.txt, max_params_b=9.4).
+# Launch one pod per shard: run.py --config config_runpod_a40.txt --mode norag --shard K/N
+min_params_b=9.5
 
 template=prompt1.jinja,prompt2.jinja,prompt3.jinja,prompt4.jinja,prompt5.jinja,prompt6.jinja,prompt7.jinja,prompt9.jinja,prompt10.jinja,prompt11.jinja
 

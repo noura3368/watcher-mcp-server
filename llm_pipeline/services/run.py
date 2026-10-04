@@ -280,6 +280,7 @@ class Runner:
                 "context_length": self.context_length,
                 "gpu": self.gpu,
                 "vram_share": self.vram_share,
+                "timeout_s": cfg["timeout"],
             }
             stamp = str(time.time_ns())
             try:
