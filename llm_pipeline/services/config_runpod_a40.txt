@@ -22,6 +22,8 @@ templates_dir=/workspace/watcher-mcp-server/llm_pipeline/templates
 # Models of 9.4B or less run on the TITAN Xp machine (config_titan.txt, max_params_b=9.4).
 # Launch one pod per shard: run.py --config config_runpod_a40.txt --mode norag --shard K/N
 min_params_b=9.5
+# Moved to a separate A5000 run (times out on most trials; 2 chains fit in 24 GB). Applied after --shard.
+exclude_models=mistral-small:24b
 
 template=prompt1.jinja,prompt2.jinja,prompt3.jinja,prompt4.jinja,prompt5.jinja,prompt6.jinja,prompt7.jinja,prompt9.jinja,prompt10.jinja,prompt11.jinja
 

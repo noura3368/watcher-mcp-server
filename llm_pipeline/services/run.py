@@ -54,6 +54,8 @@ DEFAULTS = {
     "model_end_row": 0,         # last CSV data row to use (0 = to the end)
     "min_params_b": 0.0,        # only models with at least this many billion parameters (0 = no limit)
     "max_params_b": 0.0,        # only models with at most this many billion parameters (0 = no limit)
+    "exclude_models": [],       # comma-separated model names to skip (e.g. moved to another machine)
+    "only_models": [],          # comma-separated model names; if set, run only these
     "system": None,             # korad / ftp / wifi; derived from templates_dir if empty
     "mode": None,               # rag / norag / lc; falls back to RAG_ENABLED/LC_ENABLED env vars
     "output_root": "results",
@@ -102,6 +104,8 @@ def load_config(path: Path) -> dict:
                     config[key] = float(value)
                 elif key in BOOL_KEYS:
                     config[key] = value.lower() in ("1", "true", "yes", "on")
+                elif key in ("exclude_models", "only_models"):
+                    config[key] = [m.strip() for m in value.split(",") if m.strip()]
                 elif key == "template":
                     config[key] = [] if value.lower() in ("all", "") else [t.strip() for t in value.split(",") if t.strip()]
                 else:
@@ -415,6 +419,11 @@ def main() -> None:
         models = [m for m in models if m.params_b is not None
                   and (not lo or m.params_b >= lo) and (not hi or m.params_b <= hi)]
     models = models[k::n]
+    # After sharding, so excluding a model never moves other models between shards
+    if config["only_models"]:
+        models = [m for m in models if m.name in config["only_models"]]
+    if config["exclude_models"]:
+        models = [m for m in models if m.name not in config["exclude_models"]]
     if not models:
         raise SystemExit("No models selected from the CSV")
     templates = select_templates(config)
