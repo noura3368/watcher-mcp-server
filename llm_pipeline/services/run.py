@@ -22,6 +22,7 @@ import datetime
 import json
 import logging
 import os
+import subprocess
 import sys
 import threading
 import time
@@ -51,6 +52,8 @@ DEFAULTS = {
     "timeout": 600.0,
     "model_row": 0,             # first CSV data row to use (1-based; 0/1 = from the top)
     "model_end_row": 0,         # last CSV data row to use (0 = to the end)
+    "min_params_b": 0.0,        # only models with at least this many billion parameters (0 = no limit)
+    "max_params_b": 0.0,        # only models with at most this many billion parameters (0 = no limit)
     "system": None,             # korad / ftp / wifi; derived from templates_dir if empty
     "mode": None,               # rag / norag / lc; falls back to RAG_ENABLED/LC_ENABLED env vars
     "output_root": "results",
@@ -68,7 +71,7 @@ DEFAULTS = {
 INT_KEYS = {"start_iteration", "num_iterations", "trials_per_model", "model_row",
             "model_end_row", "parallel_chains", "rag_top_k", "runaway_max_whitespace",
             "runaway_max_repeats"}
-FLOAT_KEYS = {"timeout"}
+FLOAT_KEYS = {"timeout", "min_params_b", "max_params_b"}
 BOOL_KEYS = {"pull_models", "remove_after"}
 REQUIRED = ("models_csv", "templates_dir", "target")
 SYSTEM_BY_DIR = {"templates": "korad", "ftp_prompts": "ftp", "wifi_prompts": "wifi"}
@@ -253,6 +256,8 @@ class Runner:
         self.config, self.mode, self.context = config, mode, context
         self.env, self.client, self.stop = env, client, stop
         self.context_length = None
+        self.vram_share = None  # fraction of the loaded model held in GPU memory (1.0 = no CPU spill)
+        self.gpu = detect_gpu()
 
     def run_chain(self, model: str, chain: Chain) -> None:
         cfg = self.config
@@ -273,6 +278,8 @@ class Runner:
                 "iteration": chain.iteration,
                 "trial": trial,
                 "context_length": self.context_length,
+                "gpu": self.gpu,
+                "vram_share": self.vram_share,
             }
             stamp = str(time.time_ns())
             try:
@@ -341,15 +348,32 @@ class Runner:
         except Exception as e:
             log.error("Could not load %s: %s", model, e)
             return False
-        self.context_length = None
+        self.context_length = self.vram_share = None
         try:
             for m in self.client.ps().models:
                 if m.model == model or m.name == model:
                     self.context_length = getattr(m, "context_length", None)
+                    if m.size:
+                        self.vram_share = round((m.size_vram or 0) / m.size, 3)
         except Exception:
             pass
-        log.info("Loaded %s (context length %s)", model, self.context_length or "unknown")
+        log.info("Loaded %s (context length %s, %s in GPU memory, GPU %s)", model,
+                 self.context_length or "unknown",
+                 "unknown share" if self.vram_share is None else f"{self.vram_share:.0%}", self.gpu)
         return True
+
+
+def detect_gpu() -> Optional[str]:
+    """GPU name(s) of this machine for the result records; GPU_NAME overrides (e.g. with a remote --host)."""
+    if os.environ.get("GPU_NAME"):
+        return os.environ["GPU_NAME"]
+    try:
+        out = subprocess.run(["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
+                             capture_output=True, text=True, timeout=10).stdout
+    except Exception:
+        return None
+    names = [line.strip() for line in out.splitlines() if line.strip()]
+    return " + ".join(sorted(set(names), key=names.index)) or None
 
 
 # ---------------------------------------------------------------- main
@@ -381,7 +405,15 @@ def main() -> None:
     config = load_config(Path(args.config))
     mode = resolve_mode(args.mode, config)
     k, n = parse_shard(args.shard)
-    models = load_models(config["models_csv"], config["model_row"], config["model_end_row"])[k::n]
+    models = load_models(config["models_csv"], config["model_row"], config["model_end_row"])
+    lo, hi = config["min_params_b"], config["max_params_b"]
+    if lo or hi:
+        unknown = [m.name for m in models if m.params_b is None]
+        if unknown:
+            log.warning("Skipping models with no parameter size in the CSV: %s", ", ".join(unknown))
+        models = [m for m in models if m.params_b is not None
+                  and (not lo or m.params_b >= lo) and (not hi or m.params_b <= hi)]
+    models = models[k::n]
     if not models:
         raise SystemExit("No models selected from the CSV")
     templates = select_templates(config)

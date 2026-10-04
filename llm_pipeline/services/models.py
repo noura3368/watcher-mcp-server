@@ -24,6 +24,7 @@ log = logging.getLogger("models")
 class ModelSpec:
     name: str
     row: int  # 1-based data row in the CSV
+    params_b: Optional[float] = None  # "Parameter Size (Billions)" column, if present
 
 
 def load_models(csv_path: str, start_row: int = 0, end_row: int = 0) -> List[ModelSpec]:
@@ -39,7 +40,11 @@ def load_models(csv_path: str, start_row: int = 0, end_row: int = 0) -> List[Mod
                 log.warning("Duplicate model %s at row %d skipped", name, row_num)
                 continue
             seen.add(name)
-            models.append(ModelSpec(name, row_num))
+            try:
+                params_b = float(row.get("Parameter Size (Billions)") or "")
+            except ValueError:
+                params_b = None
+            models.append(ModelSpec(name, row_num, params_b))
     return models
 
 
